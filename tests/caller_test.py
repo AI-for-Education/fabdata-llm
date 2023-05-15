@@ -4,9 +4,9 @@ from types import SimpleNamespace
 import anthropic
 from anthropic.tokenizer import get_tokenizer
 
-from llm import GPTCaller, ClaudeCaller
-from llm.llmtypes import LLMMessage
-from llm.openai.tokenizer import tokenize_chatgpt_messages
+from fdllm import GPTCaller, ClaudeCaller
+from fdllm.llmtypes import LLMMessage
+from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"

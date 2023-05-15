@@ -5,10 +5,10 @@ from types import SimpleNamespace
 import anthropic
 from anthropic.tokenizer import get_tokenizer
 
-from llm.chat import ChatController
-from llm import GPTCaller, ClaudeCaller
-from llm.llmtypes import LLMMessage
-from llm.openai.tokenizer import tokenize_chatgpt_messages
+from fdllm.chat import ChatController
+from fdllm import GPTCaller, ClaudeCaller
+from fdllm.llmtypes import LLMMessage
+from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 
 TEST_MESSAGE_TEXT = "This is a test"
 TEST_LLM_OUTPUT = LLMMessage(Role="assistant", Message=TEST_MESSAGE_TEXT)

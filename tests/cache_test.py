@@ -3,8 +3,8 @@ dotenv.load_dotenv()
 from typing import List
 import pytest
 
-from llm.llmtypes import LLMMessage
-from llm.cache import LLMMessageCache
+from fdllm.llmtypes import LLMMessage
+from fdllm.cache import LLMMessageCache
 
 phone_number = "+4412134567890"
 phone_number_for_reset = "+440987654321"

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from llm.decorators.delayed_retry import delayedretry
+from fdllm.decorators.delayed_retry import delayedretry
 
 @pytest.mark.parametrize(
     'num_times_to_fail, expected_response',

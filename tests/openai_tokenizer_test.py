@@ -1,6 +1,6 @@
 import pytest
 
-from llm.openai.tokenizer import tokenize_chatgpt_messages
+from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 
 def test_tokenize_chatgpt_messages():
     prompt = "I am a some sample question"
