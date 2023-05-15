@@ -62,7 +62,7 @@ def test_sync_decorator_waitexception():
         return test_func
     
     with patch("time.sleep", return_value = None):
-        with patch("llm.decorators.delayed_retry.pytest_exception_helper") as patch_fn:
+        with patch("fdllm.decorators.delayed_retry.pytest_exception_helper") as patch_fn:
             patch_fn.side_effect = DemoException(expected_response)
             with pytest.raises(DemoException) as err_info:
                 response = test_func_wrapper()()
@@ -132,7 +132,7 @@ async def test_async_decorator_waitexception(anyio_backend):
     
     wrapper = await test_func_wrapper_async()
     with patch("asyncio.sleep", return_value = None):
-        with patch("llm.decorators.delayed_retry.pytest_exception_helper") as patch_fn:
+        with patch("fdllm.decorators.delayed_retry.pytest_exception_helper") as patch_fn:
             patch_fn.side_effect = DemoException(expected_response)
             with pytest.raises(DemoException) as err_info:
                 response = await wrapper()
