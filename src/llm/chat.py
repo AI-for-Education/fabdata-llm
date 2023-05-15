@@ -1,7 +1,5 @@
 from __future__ import annotations
-from typing import (
-    List, Tuple, Literal, Optional
-)
+from typing import List, Tuple, Literal, Optional
 
 from pydantic.dataclasses import dataclass
 from pydantic import ConfigDict
@@ -10,14 +8,16 @@ from dataclasses import field
 from .constants import (
     LLM_EMPTY_QUESTION,
     LLM_QUESTION_TOO_LONG,
-    LLM_INAPPROPRIATE_QUESTION
+    LLM_INAPPROPRIATE_QUESTION,
+    LLM_DEFAULT_MAX_TOKENS,
 )
 from .prompt_helpers import (
     clean_prompt_string,
     build_prompt_string,
-    contains_banned_words
+    contains_banned_words,
 )
-from .llmtypes import LLMMessage, LLMCaller, DEFAULT_MAX_TOKENS
+from .llmtypes import LLMMessage, LLMCaller
+
 
 @dataclass(config=ConfigDict(validate_assignment=False))
 class ChatController:
@@ -29,15 +29,17 @@ class ChatController:
     Allow_Banned: bool = False
     Keep_History: bool = True
 
-    def chat(self, prompt: str, max_tokens: int=DEFAULT_MAX_TOKENS, **kwargs):
+    def chat(self, prompt: str, max_tokens: int = LLM_DEFAULT_MAX_TOKENS, **kwargs):
         new_message, latest_convo = self._prechat(prompt, max_tokens)
         if new_message.Role == "error":
             return new_message, None
         result = self.Caller.call(latest_convo, max_tokens, **kwargs)
         self._postchat(result)
         return new_message, result
-    
-    async def achat(self, prompt: str, max_tokens: int=DEFAULT_MAX_TOKENS, **kwargs):
+
+    async def achat(
+        self, prompt: str, max_tokens: int = LLM_DEFAULT_MAX_TOKENS, **kwargs
+    ):
         new_message, latest_convo = self._prechat(prompt, max_tokens)
         if new_message.Role == "error":
             return new_message, None
@@ -47,10 +49,7 @@ class ChatController:
 
     def _prechat(self, prompt, max_tokens):
         final_prompt = self._clean(prompt)
-        if final_prompt in [
-            LLM_EMPTY_QUESTION,
-            LLM_INAPPROPRIATE_QUESTION
-        ]:
+        if final_prompt in [LLM_EMPTY_QUESTION, LLM_INAPPROPRIATE_QUESTION]:
             return LLMMessage(Role="error", Message=final_prompt), []
         return self._build_latest_convo(final_prompt, max_tokens)
 
@@ -83,12 +82,12 @@ class ChatController:
             if "after" in self.Context_Type and sys_msg_llmmsg is not None:
                 latest_convo.append(sys_msg_llmmsg)
             return latest_convo
+
         new_message = LLMMessage(Role="user", Message=prompt)
         latest_convo = build_messagelist()
         while (
             len(self.Caller.tokenize(latest_convo))
-            > 
-            self.Caller.Token_Window - max_tokens
+            > self.Caller.Token_Window - max_tokens
         ):
             if len(self.History) > 0:
                 print("Popping history")
@@ -99,6 +98,7 @@ class ChatController:
         if self.Keep_History:
             self.History.append(new_message)
         return new_message, latest_convo
+
 
 class LLMError(Exception):
     pass
