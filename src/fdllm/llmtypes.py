@@ -1,7 +1,5 @@
 from __future__ import annotations
-from typing import (
-    List, Literal, Callable, Awaitable, Any, Tuple
-)
+from typing import List, Literal, Callable, Awaitable, Any, Optional, Dict
 import datetime
 from abc import ABC, abstractmethod
 import os
@@ -13,13 +11,23 @@ import anthropic
 from anthropic import count_tokens
 from anthropic.tokenizer import get_tokenizer
 from pydantic.dataclasses import dataclass
-from pydantic import ConfigDict, BaseModel
+from pydantic import ConfigDict, BaseModel, Field
 
 from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS
 
-ModelTypeLiteral = Literal["gpt-3.5-turbo", "gpt-4", "claude-v1"]
+ModelTypeLiteral = Optional[
+    Literal[
+        "gpt-3.5-turbo",
+        "gpt-4",
+        "claude-v1",
+        "claude-v1-100k",
+        "claude-instant-v1",
+        "claude-instant-v1-100k",
+    ]
+]
+
 
 @dataclass(config=ConfigDict(validate_assignment=True))
 class LLMModelType:
@@ -45,11 +53,11 @@ class LLMCaller(ABC, BaseModel):
     Model: LLMModelType
     Func: Callable[..., Any]
     AFunc: Callable[..., Awaitable[Any]]
-    Args: LLMCallArgs
-    APIKey: str
-    Defaults: dict
     Token_Window: int
-    
+    APIKey: Optional[str] = None
+    Defaults: Dict = Field(default_factory=dict)
+    Args: Optional[LLMCallArgs] = None
+
     @abstractmethod
     def format_message(self, message: LLMMessage):
         pass
@@ -57,7 +65,7 @@ class LLMCaller(ABC, BaseModel):
     @abstractmethod
     def format_messagelist(self, messagelist: List[LLMMessage]):
         pass
-    
+
     @abstractmethod
     def format_output(self, output: Any) -> LLMMessage:
         pass
@@ -69,27 +77,28 @@ class LLMCaller(ABC, BaseModel):
     def call(
         self,
         messages: List[LLMMessage] | LLMMessage,
-        max_tokens: int=LLM_DEFAULT_MAX_TOKENS,
-        **kwargs
+        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
+        **kwargs,
     ):
         kwargs = self._proc_call_args(messages, max_tokens, **kwargs)
         return self.format_output(self._call(**kwargs))
-    
+
     async def acall(
         self,
         messages: List[LLMMessage] | LLMMessage,
-        max_tokens: int=LLM_DEFAULT_MAX_TOKENS,
-        **kwargs
+        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
+        **kwargs,
     ):
         kwargs = self._proc_call_args(messages, max_tokens, **kwargs)
         return self.format_output(await self._acall(**kwargs))
 
     def _proc_call_args(self, messages, max_tokens, **kwargs):
-        kwargs[self.Args.Model] = self.Model.Name
-        kwargs[self.Args.Max_Tokens] = max_tokens
         if isinstance(messages, LLMMessage):
             messages = [messages]
-        kwargs[self.Args.Messages] = self.format_messagelist(messages)
+        if self.Args is not None:
+            kwargs[self.Args.Model] = self.Model.Name
+            kwargs[self.Args.Max_Tokens] = max_tokens
+            kwargs[self.Args.Messages] = self.format_messagelist(messages)
         return {**self.Defaults, **kwargs}
 
     @delayedretry(rethrow_final_error=True)
@@ -99,4 +108,31 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(rethrow_final_error=True)
     async def _acall(self, *args, **kwargs):
         return await self.AFunc(*args, **kwargs)
-    
+
+
+class LiteralCaller(LLMCaller):
+    def __init__(self, text: str):
+        super().__init__(
+            Model = LLMModelType(Name=None),
+            Func = lambda: text,
+            AFunc = self._literalafunc(text),
+            Token_Window = 0,
+        )
+
+    @staticmethod
+    def _literalafunc(text):
+        async def afunc():
+            return text
+        return afunc
+
+    def format_message(self, message: LLMMessage):
+        return super().format_message(message)
+
+    def format_messagelist(self, messagelist: List[LLMMessage]):
+        return super().format_messagelist(messagelist)
+
+    def format_output(self, output: Any) -> LLMMessage:
+        return LLMMessage(Role="assistant", Message=output)
+
+    def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
+        return super().tokenize(messagelist)
