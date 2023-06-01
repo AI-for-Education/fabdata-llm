@@ -23,7 +23,7 @@ class ClaudeCaller(LLMCaller):
             Defaults = {
                 "stop_sequence": [anthropic.HUMAN_PROMPT],
             },
-            Token_Window = 8000,
+            Token_Window = 100000 if "-100k" in model else 8000
         )
     
     def format_message(self, message: LLMMessage):

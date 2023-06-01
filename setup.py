@@ -36,7 +36,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.1.1',  # Required
+    version='0.2.0',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
@@ -130,7 +130,7 @@ setup(
     # 'Programming Language' classifiers above, 'pip install' will check this
     # and refuse to install the project if the version does not match. See
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
-    python_requires='>=3.10, <3.11',
+    python_requires='>=3.10, <3.12',
 
     # This field lists other packages that your project depends on to run.
     # Any package you put here will be installed by pip when your project is
@@ -142,7 +142,7 @@ setup(
         "pydantic <= 1.10.5",
         "python-dotenv <= 0.21.1",
         "openai <= 0.27.2",
-        "anthropic <= 0.2.7",
+        "anthropic <= 0.2.9",
         "tiktoken <= 0.2.0",
         "pytest <= 7.2.1",
         "pytest-cov <= 4.0.0",
