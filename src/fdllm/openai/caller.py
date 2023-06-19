@@ -1,5 +1,6 @@
 import os
 from typing import List, Any
+from types import GeneratorType
 
 import openai
 
@@ -33,7 +34,10 @@ class GPTCaller(LLMCaller):
         return [self.format_message(message) for message in messagelist]
     
     def format_output(self, output: Any):
-        return LLMMessage(Role="assistant", Message=output.choices[0].message.content)
+        if isinstance(output, GeneratorType):
+            return output
+        else:
+            return LLMMessage(Role="assistant", Message=output.choices[0].message.content)
     
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenize_chatgpt_messages(
