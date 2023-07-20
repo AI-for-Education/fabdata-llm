@@ -20,11 +20,16 @@ from .constants import LLM_DEFAULT_MAX_TOKENS
 ModelTypeLiteral = Optional[
     Literal[
         "gpt-3.5-turbo",
+        "gpt-3.5-turbo-0301",
+        "gpt-3.5-turbo-0613",
         "gpt-4",
+        "gpt-4-0314",
+        "gpt-4-0613",
         "claude-v1",
         "claude-v1-100k",
         "claude-instant-v1",
         "claude-instant-v1-100k",
+        "claude-2",
     ]
 ]
 
