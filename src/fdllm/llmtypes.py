@@ -6,8 +6,8 @@ import os
 from dataclasses import field
 from functools import wraps
 
-import openai
-import anthropic
+from openai.error import RateLimitError
+from anthropic import ApiException
 from anthropic import count_tokens
 from anthropic.tokenizer import get_tokenizer
 from pydantic.dataclasses import dataclass
@@ -15,7 +15,7 @@ from pydantic import ConfigDict, BaseModel, Field
 
 from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
-from .constants import LLM_DEFAULT_MAX_TOKENS
+from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 
 ModelTypeLiteral = Optional[
     Literal[
@@ -30,6 +30,9 @@ ModelTypeLiteral = Optional[
         "claude-instant-v1",
         "claude-instant-v1-100k",
         "claude-2",
+        "fabdata-openai-devel-gpt4",
+        "fabdata-openai-devel-gpt432k",
+        "fabdata-openai-devel-gpt35",
     ]
 ]
 
@@ -78,11 +81,22 @@ class LLMCaller(ABC, BaseModel):
     @abstractmethod
     def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
         pass
+    
+    def sanitize_messagelist(
+        self, messagelist: List[LLMMessage], min_new_token_window: int
+    ) -> List[LLMMessage]:
+        out = messagelist
+        while (
+            self.Token_Window - len(self.tokenize(messagelist)) 
+            < min_new_token_window
+        ):
+            out = out[1:]
+        return out
 
     def call(
         self,
         messages: List[LLMMessage] | LLMMessage,
-        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
+        max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
         **kwargs,
     ):
         kwargs = self._proc_call_args(messages, max_tokens, **kwargs)
@@ -100,17 +114,27 @@ class LLMCaller(ABC, BaseModel):
     def _proc_call_args(self, messages, max_tokens, **kwargs):
         if isinstance(messages, LLMMessage):
             messages = [messages]
+        if max_tokens is None:
+            max_tokens = self.Token_Window - (len(self.tokenize(messages)) + 64)
         if self.Args is not None:
             kwargs[self.Args.Model] = self.Model.Name
             kwargs[self.Args.Max_Tokens] = max_tokens
             kwargs[self.Args.Messages] = self.format_messagelist(messages)
         return {**self.Defaults, **kwargs}
 
-    @delayedretry(rethrow_final_error=True)
+    @delayedretry(
+        rethrow_final_error=True,
+        max_attempts=LLM_DEFAULT_MAX_RETRIES,
+        include_errors=[RateLimitError, ApiException]
+    )
     def _call(self, *args, **kwargs):
         return self.Func(*args, **kwargs)
 
-    @delayedretry(rethrow_final_error=True)
+    @delayedretry(
+        rethrow_final_error=True,
+        max_attempts=LLM_DEFAULT_MAX_RETRIES,
+        include_errors=[RateLimitError, ApiException]
+    )
     async def _acall(self, *args, **kwargs):
         return await self.AFunc(*args, **kwargs)
 

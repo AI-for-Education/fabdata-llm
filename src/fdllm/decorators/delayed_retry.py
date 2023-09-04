@@ -6,7 +6,13 @@ import inspect
 def pytest_exception_helper():
     return 1
 
-def delayedretry(initial_wait=1, exponent=2, max_attempts=5, rethrow_final_error = False):
+def delayedretry(
+    initial_wait=1,
+    exponent=2,
+    max_attempts=5,
+    rethrow_final_error=False,
+    include_errors=[]
+):
     def mydec(func):
         wait_time = [initial_wait]
         def reset_wait_time():
@@ -21,8 +27,12 @@ def delayedretry(initial_wait=1, exponent=2, max_attempts=5, rethrow_final_error
                     out = await func(*args, **kwargs)
                     reset_wait_time()
                     return out
-                except:
-                    if len(wait_time) == max_attempts:
+                except Exception as e:
+                    if (
+                        len(wait_time) == max_attempts
+                        or
+                        not isinstance(e, tuple(include_errors))
+                    ):
                         reset_wait_time()
                         if rethrow_final_error:
                             raise
@@ -43,8 +53,12 @@ def delayedretry(initial_wait=1, exponent=2, max_attempts=5, rethrow_final_error
                     out = func(*args, **kwargs)
                     reset_wait_time()
                     return out
-                except:
-                    if len(wait_time) == max_attempts:
+                except Exception as e:
+                    if (
+                        len(wait_time) == max_attempts
+                        or
+                        not isinstance(e, tuple(include_errors))
+                    ):
                         reset_wait_time()
                         if rethrow_final_error:
                             raise

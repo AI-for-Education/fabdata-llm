@@ -18,12 +18,28 @@ class GPTCaller(LLMCaller):
             Func = openai.ChatCompletion.create,
             AFunc = openai.ChatCompletion.acreate,
             Args = LLMCallArgs(
-                Model="model", Messages="messages", Max_Tokens="max_tokens"
+                Model=(
+                    "engine" if model in [
+                        "fabdata-openai-devel-gpt4",
+                        "fabdata-openai-devel-gpt432k",
+                        "fabdata-openai-devel-gpt35",
+                    ]
+                    else "model"
+                ),
+                Messages="messages",
+                Max_Tokens="max_tokens"
             ),
             APIKey = api_key,
             Defaults = {},
             Token_Window = (
-                4096 if model == "gpt-3.5-turbo" else 8000
+                4096 if model in [
+                    "gpt-3.5-turbo",
+                    "gpt-3.5-turbo-0301",
+                    "gpt-3.5-turbo-0613",
+                    "fabdata-openai-devel-gpt35",
+                ]
+                else 32000 if model == "fabdata-openai-devel-gpt432k"
+                else 8000
             ),
         )
     

@@ -16,7 +16,12 @@ def test_sync_decorator(num_times_to_fail, expected_response):
     def test_func_wrapper():
         num_attempts = 0
 
-        @delayedretry(initial_wait=1, exponent=1, max_attempts=max_attempts)
+        @delayedretry(
+            initial_wait=1,
+            exponent=1,
+            max_attempts=max_attempts,
+            include_errors=[ValueError],
+        )
         def test_func():
             nonlocal num_attempts
             num_attempts = num_attempts + 1
@@ -50,7 +55,12 @@ def test_sync_decorator_waitexception():
     def test_func_wrapper():
         num_attempts = 0
 
-        @delayedretry(initial_wait=1, exponent=1, max_attempts=max_attempts)
+        @delayedretry(
+            initial_wait=1,
+            exponent=1,
+            max_attempts=max_attempts,
+            include_errors=[ValueError],
+        )
         def test_func():
             nonlocal num_attempts
             num_attempts = num_attempts + 1
@@ -85,7 +95,12 @@ async def test_async_decorator(anyio_backend, num_times_to_fail, expected_respon
     async def test_func_wrapper_async():
         num_attempts = 0
 
-        @delayedretry(initial_wait=1, exponent=1, max_attempts=max_attempts)
+        @delayedretry(
+            initial_wait=1,
+            exponent=1,
+            max_attempts=max_attempts,
+            include_errors=[ValueError],
+        )
         async def test_func_async():
             nonlocal num_attempts
             num_attempts = num_attempts + 1
@@ -119,7 +134,12 @@ async def test_async_decorator_waitexception(anyio_backend):
     async def test_func_wrapper_async():
         num_attempts = 0
 
-        @delayedretry(initial_wait=1, exponent=1, max_attempts=max_attempts)
+        @delayedretry(
+            initial_wait=1,
+            exponent=1,
+            max_attempts=max_attempts,
+            include_errors=[ValueError],
+        )
         async def test_func_async():
             nonlocal num_attempts
             num_attempts = num_attempts + 1

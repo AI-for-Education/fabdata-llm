@@ -8,3 +8,5 @@ LLM_INAPPROPRIATE_RESPONSE = "The response to your question was deemed as inappr
 LLM_QUESTION_TOO_LONG = "The question you have submitted is too long, please reduce it"
 
 LLM_DEFAULT_MAX_TOKENS = 500
+
+LLM_DEFAULT_MAX_RETRIES = 8
