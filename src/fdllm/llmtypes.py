@@ -33,6 +33,7 @@ ModelTypeLiteral = Optional[
         "fabdata-openai-devel-gpt4",
         "fabdata-openai-devel-gpt432k",
         "fabdata-openai-devel-gpt35",
+        "fabdata-openai-educaid-gpt4",
     ]
 ]
 
