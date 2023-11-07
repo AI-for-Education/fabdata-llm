@@ -23,6 +23,9 @@ class GPTCaller(LLMCaller):
                         "fabdata-openai-devel-gpt4",
                         "fabdata-openai-devel-gpt432k",
                         "fabdata-openai-devel-gpt35",
+                        "fabdata-openai-eastus2-gpt4",
+                        "fabdata-openai-eastus2-gpt432k",
+                        "fabdata-openai-eastus2-gpt35",
                         "fabdata-openai-educaid-gpt4",
                     ]
                     else "model"
@@ -40,8 +43,13 @@ class GPTCaller(LLMCaller):
                     "fabdata-openai-devel-gpt35",
                 ]
                 else 32000 if model == "fabdata-openai-devel-gpt432k"
+                else 128000 if model == "gpt-4-1106-preview"
                 else 8000
             ),
+            Token_Limit_Completion = (
+                4096 if model == "gpt-4-1106-preview"
+                else None
+            )
         )
     
     def format_message(self, message: LLMMessage):

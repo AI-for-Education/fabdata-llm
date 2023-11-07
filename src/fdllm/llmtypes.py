@@ -25,6 +25,7 @@ ModelTypeLiteral = Optional[
         "gpt-4",
         "gpt-4-0314",
         "gpt-4-0613",
+        "gpt-4-1106-preview",
         "claude-v1",
         "claude-v1-100k",
         "claude-instant-v1",
@@ -33,6 +34,9 @@ ModelTypeLiteral = Optional[
         "fabdata-openai-devel-gpt4",
         "fabdata-openai-devel-gpt432k",
         "fabdata-openai-devel-gpt35",
+        "fabdata-openai-eastus2-gpt4",
+        "fabdata-openai-eastus2-gpt432k",
+        "fabdata-openai-eastus2-gpt35",
         "fabdata-openai-educaid-gpt4",
     ]
 ]
@@ -63,6 +67,7 @@ class LLMCaller(ABC, BaseModel):
     Func: Callable[..., Any]
     AFunc: Callable[..., Awaitable[Any]]
     Token_Window: int
+    Token_Limit_Completion: Optional[int] = None
     APIKey: Optional[str] = None
     Defaults: Dict = Field(default_factory=dict)
     Args: Optional[LLMCallArgs] = None
@@ -117,6 +122,8 @@ class LLMCaller(ABC, BaseModel):
             messages = [messages]
         if max_tokens is None:
             max_tokens = self.Token_Window - (len(self.tokenize(messages)) + 64)
+        if self.Token_Limit_Completion is not None:
+            max_tokens = min(max_tokens, self.Token_Limit_Completion)
         if self.Args is not None:
             kwargs[self.Args.Model] = self.Model.Name
             kwargs[self.Args.Max_Tokens] = max_tokens
