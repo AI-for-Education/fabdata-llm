@@ -35,11 +35,12 @@ class ChatController(BaseModel):
         prompt: str,
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
         images: Optional[List[Image.Image]] = None,
+        detail: Literal["low", "high"] = "low",
         **kwargs,
     ):
         self._run_plugins(prompt)
         try:
-            new_message, latest_convo = self._prechat(prompt, max_tokens, images)
+            new_message, latest_convo = self._prechat(prompt, max_tokens, images, detail)
         except:
             self._clean_plugins()
             raise
@@ -96,8 +97,8 @@ class ChatController(BaseModel):
         for plugin in reversed(self._plugins):
             await plugin._post_achat()
 
-    def _prechat(self, prompt, max_tokens, images=None):
-        images = LLMImage.list_from_images(images)
+    def _prechat(self, prompt, max_tokens, images=None, detail="low"):
+        images = LLMImage.list_from_images(images, detail=detail)
         final_prompt = self._clean(prompt)
         if final_prompt in [LLM_EMPTY_QUESTION, LLM_INAPPROPRIATE_QUESTION]:
             return (

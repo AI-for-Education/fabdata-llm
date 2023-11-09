@@ -17,7 +17,7 @@ caller = GPTVisionCaller("gpt-4-vision-preview")
 message = LLMMessage(
     Role="user",
     Message="Compare these 2 paintings",
-    Images=LLMImage.list_from_images(testims, detail="low")
+    Images=LLMImage.list_from_images(testims, detail="high")
 )
 
 print(caller.call([message]))
@@ -26,7 +26,7 @@ print(caller.call([message]))
 chatter = ChatController(Caller=caller)
 
 # %%
-chatter.chat("Compare these 2 paintings", images=testims)
+chatter.chat("Compare these 2 paintings", images=testims, detail="high")
 
 # %%
 chatter.chat("Can you say more")
