@@ -58,7 +58,7 @@ class LLMMessage(BaseModel):
     Message: str
     Images: Optional[List[LLMImage]] = None
     TokensUsed: int = 0
-    DateUTC: datetime.datetime = datetime.datetime.utcnow()
+    DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     class Config:
         arbitrary_types_allowed = True
