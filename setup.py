@@ -149,6 +149,7 @@ setup(
         "pytest-dotenv <= 0.5.2",
         "aiofiles <= 23.1.0",
         "pillow <= 9.5.0",
+        "numpy == 1.24.3"
         ],  # Optional
 
     # List additional groups of dependencies here (e.g. development
