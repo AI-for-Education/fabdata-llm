@@ -1,17 +1,22 @@
 from __future__ import annotations
-from typing import List, Literal, Callable, Awaitable, Any, Optional, Dict
+from typing import List, Literal, Callable, Awaitable, Any, Optional, Dict, Union
 import datetime
 from abc import ABC, abstractmethod
 import os
 from dataclasses import field
 from functools import wraps
+from pathlib import Path
+from io import BytesIO
+import base64
 
-from openai.error import RateLimitError
+import numpy as np
+from openai import RateLimitError
 from anthropic import ApiException
 from anthropic import count_tokens
 from anthropic.tokenizer import get_tokenizer
 from pydantic.dataclasses import dataclass
 from pydantic import ConfigDict, BaseModel, Field
+from PIL import Image
 
 from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
@@ -26,6 +31,7 @@ ModelTypeLiteral = Optional[
         "gpt-4-0314",
         "gpt-4-0613",
         "gpt-4-1106-preview",
+        "gpt-4-vision-preview",
         "claude-v1",
         "claude-v1-100k",
         "claude-instant-v1",
@@ -47,12 +53,80 @@ class LLMModelType:
     Name: ModelTypeLiteral
 
 
-@dataclass(config=ConfigDict(validate_assignment=True))
-class LLMMessage:
+class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "error"]
     Message: str
+    Images: Optional[List[LLMImage]] = None
     TokensUsed: int = 0
     DateUTC: datetime.datetime = datetime.datetime.utcnow()
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+class LLMImage(BaseModel):
+    Url: Optional[str] = None
+    Img: Optional[Union[Image.Image, Path]] = None
+    Detail: Literal["low", "high"] = "low"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._format_image()
+
+    @classmethod
+    def list_from_images(
+        cls, images: Optional[List[Image.Image]], detail: Literal["low", "high"] = "low"
+    ):
+        if images is None:
+            return
+        else:
+            return [cls(Img=img, Detail=detail) for img in images]
+
+    def encode(self):
+        if self.Img is None:
+            return
+        bts = BytesIO()
+        self.Img.save(bts, format="png")
+        bts.seek(0)
+        return base64.b64encode(bts.read()).decode("utf-8")
+
+    def tokenize(self):
+        if self.Detail == "low":
+            return 85
+        else:
+            if self.Img is None:
+                # if image is url we use worst case scenario
+                # for width and height
+                width, height = 2048, 768
+            else:
+                width, height = self.Img.size
+            ngridw = int(np.ceil(width / 512))
+            ngridh = int(np.ceil(height / 512))
+            ntiles = ngridw * ngridh
+            return ntiles * 170 + 85
+
+    def _format_image(self):
+        im = self.Img
+        if im is None:
+            return
+        detail = self.Detail
+        width, height = im.size
+        if detail == "low":
+            im = im.resize((512, 512), Image.BILINEAR)
+        else:
+            maxdim = max(width, height)
+            if maxdim > 2048:
+                width = width * (2048 / maxdim)
+                height = height * (2048 / maxdim)
+            shortestdim = min(width, height)
+            scale = min(768 / shortestdim, 1)
+            finalwidth = int(width * scale)
+            finalheight = int(height * scale)
+            im = im.resize((finalwidth, finalheight), Image.BILINEAR)
+        self.Img = im
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 @dataclass(config=ConfigDict(validate_assignment=True))
@@ -87,14 +161,13 @@ class LLMCaller(ABC, BaseModel):
     @abstractmethod
     def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
         pass
-    
+
     def sanitize_messagelist(
         self, messagelist: List[LLMMessage], min_new_token_window: int
     ) -> List[LLMMessage]:
         out = messagelist
         while (
-            self.Token_Window - len(self.tokenize(messagelist)) 
-            < min_new_token_window
+            self.Token_Window - len(self.tokenize(messagelist)) < min_new_token_window
         ):
             out = out[1:]
         return out
@@ -133,7 +206,7 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitError, ApiException]
+        include_errors=[RateLimitError, ApiException],
     )
     def _call(self, *args, **kwargs):
         return self.Func(*args, **kwargs)
@@ -141,7 +214,7 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitError, ApiException]
+        include_errors=[RateLimitError, ApiException],
     )
     async def _acall(self, *args, **kwargs):
         return await self.AFunc(*args, **kwargs)
@@ -150,16 +223,17 @@ class LLMCaller(ABC, BaseModel):
 class LiteralCaller(LLMCaller):
     def __init__(self, text: str):
         super().__init__(
-            Model = LLMModelType(Name=None),
-            Func = lambda: text,
-            AFunc = self._literalafunc(text),
-            Token_Window = 0,
+            Model=LLMModelType(Name=None),
+            Func=lambda: text,
+            AFunc=self._literalafunc(text),
+            Token_Window=0,
         )
 
     @staticmethod
     def _literalafunc(text):
         async def afunc():
             return text
+
         return afunc
 
     def format_message(self, message: LLMMessage):
@@ -173,3 +247,6 @@ class LiteralCaller(LLMCaller):
 
     def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
         return super().tokenize(messagelist)
+
+
+LLMMessage.update_forward_refs()

@@ -17,7 +17,11 @@ TEST_RESULT_OPENAI = SimpleNamespace(
         message=SimpleNamespace(content=TEST_MESSAGE_TEXT)
     )]
 )
+TEST_MODELS = ["gpt-3.5-turbo", "fabdata-openai-eastus2-gpt35"]
 
+@pytest.mark.parametrize("model", TEST_MODELS)
+def test_init_openai(model):
+    GPTCaller(model=model)    
 
 @pytest.mark.parametrize(
     "role, expected",
