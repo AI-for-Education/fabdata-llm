@@ -29,13 +29,15 @@ class GPTCaller(LLMCaller):
             Func=(
                 AzureOpenAI(
                     azure_deployment=model,
-                ).chat.completions.create if _is_azure(model)
+                ).chat.completions.create
+                if _is_azure(model)
                 else OpenAI(api_key=api_key).chat.completions.create
             ),
             AFunc=(
                 AsyncAzureOpenAI(
                     azure_deployment=model,
-                ).chat.completions.create if _is_azure(model)
+                ).chat.completions.create
+                if _is_azure(model)
                 else AsyncOpenAI(api_key=api_key).chat.completions.create
             ),
             Args=LLMCallArgs(
@@ -53,9 +55,11 @@ class GPTCaller(LLMCaller):
                     "gpt-3.5-turbo-0301",
                     "gpt-3.5-turbo-0613",
                     "fabdata-openai-devel-gpt35",
+                    "fabdata-openai-eastus2-gpt35",
                 ]
                 else 32000
-                if model == "fabdata-openai-devel-gpt432k"
+                if model
+                in ["fabdata-openai-devel-gpt432k", "fabdata-openai-eastus2-gpt432k"]
                 else 128000
                 if model == "gpt-4-1106-preview"
                 else 8000
@@ -102,7 +106,7 @@ class GPTVisionCaller(LLMCaller):
             Token_Limit_Completion=4096,
         )
 
-    def format_message(self, message: LLMMessage):        
+    def format_message(self, message: LLMMessage):
         content = [{"type": "text", "text": message.Message}]
         if message.Images is not None:
             content += [
@@ -110,18 +114,16 @@ class GPTVisionCaller(LLMCaller):
                     "type": "image_url",
                     "image_url": {
                         "url": (
-                            im.Url if im.Url is not None
+                            im.Url
+                            if im.Url is not None
                             else f"data:image/png;base64,{im.encode()}"
                         ),
-                        "detail": im.Detail
-                    }
+                        "detail": im.Detail,
+                    },
                 }
                 for im in message.Images
             ]
-        return {
-            "role": message.Role,
-            "content": content
-        }
+        return {"role": message.Role, "content": content}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         return [self.format_message(message) for message in messagelist]
