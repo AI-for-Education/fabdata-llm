@@ -40,7 +40,9 @@ class ChatController(BaseModel):
     ):
         self._run_plugins(prompt)
         try:
-            new_message, latest_convo = self._prechat(prompt, max_tokens, images, detail)
+            new_message, latest_convo = self._prechat(
+                prompt, max_tokens, images, detail
+            )
         except:
             self._clean_plugins()
             raise
@@ -57,11 +59,14 @@ class ChatController(BaseModel):
         prompt: str,
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
         images: Optional[List[Image.Image]] = None,
+        detail: Literal["low", "high"] = "low",
         **kwargs,
     ):
         await self._arun_plugins(prompt)
         try:
-            new_message, latest_convo = self._prechat(prompt, max_tokens, images)
+            new_message, latest_convo = self._prechat(
+                prompt, max_tokens, images, detail
+            )
         except:
             await self._aclean_plugins()
             raise
