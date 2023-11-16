@@ -1,7 +1,7 @@
 import pytest
 
 import anthropic
-from anthropic.tokenizer import get_tokenizer
+from anthropic._tokenizers import sync_get_tokenizer as get_tokenizer
 
 from fdllm import ClaudeCaller
 from fdllm.llmtypes import LLMMessage

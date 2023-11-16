@@ -4,8 +4,6 @@ from types import SimpleNamespace
 from itertools import product
 from typing import List
 
-import anthropic
-from anthropic.tokenizer import get_tokenizer
 from pydantic import PrivateAttr
 
 from fdllm.chat import ChatController, ChatPlugin

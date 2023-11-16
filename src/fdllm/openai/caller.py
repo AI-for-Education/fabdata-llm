@@ -1,5 +1,5 @@
 import os
-from typing import List, Any, Union, Literal
+from typing import List, Any, Union, get_args
 from types import GeneratorType
 import base64
 from io import BytesIO
@@ -12,59 +12,42 @@ from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2
 from ..llmtypes import (
     LLMCaller,
     LLMCallArgs,
-    ModelTypeLiteral,
+    OpenAIModelType,
+    OpenAIVisionModelType,
+    AzureOpenAIModelType,
     LLMModelType,
     LLMMessage,
 )
 
 
 class GPTCaller(LLMCaller):
-    def __init__(
-        self,
-        model: ModelTypeLiteral = "gpt-3.5-turbo",
-        api_key=os.environ.get("OPENAI_API_KEY", ""),
-    ):
+    def __init__(self, model: str = "gpt-3.5-turbo"):
+        Modtype = LLMModelType.get_type(model)
+        if isinstance(Modtype, tuple):
+            raise ValueError(f"{model} is ambiguous type")
+        if Modtype not in [OpenAIModelType, AzureOpenAIModelType]:
+            raise ValueError(f"{model} is not supported")
+        
+        model_: LLMModelType = Modtype(Name=model)
+        
+        if Modtype in [OpenAIModelType]:
+            client = OpenAI(**model_.Client_Args)
+            aclient = AsyncOpenAI(**model_.Client_Args)
+        elif Modtype in [AzureOpenAIModelType]:
+            client = AzureOpenAI(azure_deployment=model, **model_.Client_Args)
+            aclient = AsyncAzureOpenAI(azure_deployment=model, **model_.Client_Args)
         super().__init__(
-            Model=LLMModelType(Name=model),
-            Func=(
-                AzureOpenAI(
-                    azure_deployment=model,
-                ).chat.completions.create
-                if _is_azure(model)
-                else OpenAI(api_key=api_key).chat.completions.create
-            ),
-            AFunc=(
-                AsyncAzureOpenAI(
-                    azure_deployment=model,
-                ).chat.completions.create
-                if _is_azure(model)
-                else AsyncOpenAI(api_key=api_key).chat.completions.create
-            ),
+            Model=model_,
+            Func=client.chat.completions.create,
+            AFunc=aclient.chat.completions.create,
             Args=LLMCallArgs(
                 Model="model",
                 Messages="messages",
                 Max_Tokens="max_tokens",
             ),
-            APIKey=api_key,
             Defaults={},
-            Token_Window=(
-                4096
-                if model
-                in [
-                    "gpt-3.5-turbo",
-                    "gpt-3.5-turbo-0301",
-                    "gpt-3.5-turbo-0613",
-                    "fabdata-openai-devel-gpt35",
-                    "fabdata-openai-eastus2-gpt35",
-                ]
-                else 32000
-                if model
-                in ["fabdata-openai-devel-gpt432k", "fabdata-openai-eastus2-gpt432k"]
-                else 128000
-                if model == "gpt-4-1106-preview"
-                else 8000
-            ),
-            Token_Limit_Completion=(4096 if model == "gpt-4-1106-preview" else None),
+            Token_Window=model_.Token_Window,
+            Token_Limit_Completion=model_.Token_Limit_Completion,
         )
 
     def format_message(self, message: LLMMessage):
@@ -88,22 +71,32 @@ class GPTCaller(LLMCaller):
 class GPTVisionCaller(LLMCaller):
     def __init__(
         self,
-        model: ModelTypeLiteral = "gpt-4-vision-preview",
-        api_key=os.environ.get("OPENAI_API_KEY", ""),
+        model: str = "gpt-4-vision-preview"
     ):
+        Modtype = LLMModelType.get_type(model)
+        if isinstance(Modtype, tuple):
+            raise ValueError(f"{model} is ambiguous type")
+        if Modtype not in [OpenAIVisionModelType]:
+            raise ValueError(f"{model} is not supported")
+        
+        model_: LLMModelType = Modtype(Name=model)
+        
+        if Modtype in [OpenAIVisionModelType]:
+            client = OpenAI(**model_.Client_Args)
+            aclient = AsyncOpenAI(**model_.Client_Args)
+            
         super().__init__(
-            Model=LLMModelType(Name=model),
-            Func=OpenAI(api_key=api_key).chat.completions.create,
-            AFunc=AsyncOpenAI(api_key=api_key).chat.completions.create,
+            Model=model_,
+            Func=client.chat.completions.create,
+            AFunc=aclient.chat.completions.create,
             Args=LLMCallArgs(
                 Model="model",
                 Messages="messages",
                 Max_Tokens="max_tokens",
             ),
-            APIKey=api_key,
             Defaults={},
-            Token_Window=128000,
-            Token_Limit_Completion=4096,
+            Token_Window=model_.Token_Window,
+            Token_Limit_Completion=model_.Token_Limit_Completion,
         )
 
     def format_message(self, message: LLMMessage):
@@ -145,15 +138,3 @@ class GPTVisionCaller(LLMCaller):
                     ntok = img.tokenize()
                     imgtokens += ntok
         return [None] * (texttokens + imgtokens)
-
-
-def _is_azure(model):
-    return model in [
-        "fabdata-openai-devel-gpt4",
-        "fabdata-openai-devel-gpt432k",
-        "fabdata-openai-devel-gpt35",
-        "fabdata-openai-eastus2-gpt4",
-        "fabdata-openai-eastus2-gpt432k",
-        "fabdata-openai-eastus2-gpt35",
-        "fabdata-openai-educaid-gpt4",
-    ]

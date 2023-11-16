@@ -1,9 +1,11 @@
 import pytest
 from types import SimpleNamespace
+from pathlib import Path
 
-from fdllm import GPTCaller
+from fdllm import GPTCaller, GPTVisionCaller
 from fdllm.llmtypes import LLMMessage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
+from fdllm.sysutils import register_models
 
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"
@@ -18,10 +20,17 @@ TEST_RESULT_OPENAI = SimpleNamespace(
     )]
 )
 TEST_MODELS = ["gpt-3.5-turbo", "fabdata-openai-eastus2-gpt35"]
+TEST_VISION_MODELS = ["gpt-4-vision-preview"]
+
+register_models(Path(__file__).parents[3] / "custom_models.yaml")
 
 @pytest.mark.parametrize("model", TEST_MODELS)
 def test_init_openai(model):
-    GPTCaller(model=model)    
+    GPTCaller(model=model)
+
+@pytest.mark.parametrize("model", TEST_VISION_MODELS)
+def test_init_openaivision(model):
+    GPTVisionCaller(model=model)
 
 @pytest.mark.parametrize(
     "role, expected",

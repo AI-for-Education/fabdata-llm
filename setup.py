@@ -36,7 +36,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.7.5',  # Required
+    version='0.8.0',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
@@ -142,7 +142,7 @@ setup(
         "pydantic <= 1.10.5",
         "python-dotenv <= 0.21.1",
         "openai == 1.1.1",
-        "anthropic <= 0.2.9",
+        "anthropic == 0.7",
         "tiktoken <= 0.2.0",
         "pytest <= 7.2.1",
         "pytest-cov <= 4.0.0",
@@ -168,8 +168,9 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={  # Optional
+        "fdllm": ["models.yaml"]
     },
-    #include_package_data=True,
+    include_package_data=True,
 
     # Although 'package_data' is the preferred approach, in some case you may
     # need to place data files outside of your packages. See:

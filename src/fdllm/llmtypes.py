@@ -10,10 +10,8 @@ from io import BytesIO
 import base64
 
 import numpy as np
-from openai import RateLimitError
-from anthropic import ApiException
-from anthropic import count_tokens
-from anthropic.tokenizer import get_tokenizer
+from openai import RateLimitError as RateLimitErrorOpenAI
+from anthropic import RateLimitError as RateLimitErrorAnthropic
 from pydantic.dataclasses import dataclass
 from pydantic import ConfigDict, BaseModel, Field
 from PIL import Image
@@ -21,36 +19,65 @@ from PIL import Image
 from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
-
-ModelTypeLiteral = Optional[
-    Literal[
-        "gpt-3.5-turbo",
-        "gpt-3.5-turbo-0301",
-        "gpt-3.5-turbo-0613",
-        "gpt-4",
-        "gpt-4-0314",
-        "gpt-4-0613",
-        "gpt-4-1106-preview",
-        "gpt-4-vision-preview",
-        "claude-v1",
-        "claude-v1-100k",
-        "claude-instant-v1",
-        "claude-instant-v1-100k",
-        "claude-2",
-        "fabdata-openai-devel-gpt4",
-        "fabdata-openai-devel-gpt432k",
-        "fabdata-openai-devel-gpt35",
-        "fabdata-openai-eastus2-gpt4",
-        "fabdata-openai-eastus2-gpt432k",
-        "fabdata-openai-eastus2-gpt35",
-        "fabdata-openai-educaid-gpt4",
-    ]
-]
+from .sysutils import load_models
 
 
-@dataclass(config=ConfigDict(validate_assignment=True))
-class LLMModelType:
-    Name: ModelTypeLiteral
+class LLMModelType(BaseModel):
+    Name: Optional[str]
+    Token_Window: int
+    Token_Limit_Completion: Optional[int] = None
+    Client_Args: dict = Field(default_factory=dict)
+
+    def __init__(self, Name, model_type=None):
+        if model_type is None:
+            super().__init__(Name=Name, Token_Window=0)
+            return
+        basemodels = load_models()
+        if model_type not in basemodels:
+            raise NotImplementedError(f"{model_type} is not a valid model type")
+        typemodels = basemodels[model_type]
+        if Name not in typemodels:
+            raise NotImplementedError(f"{Name} is not a valid {model_type} model")
+        super().__init__(Name=Name, **typemodels[Name])
+
+    @classmethod
+    def get_type(cls, name) -> Union[tuple[LLMModelType], LLMModelType, None]:
+        basemodels = load_models()
+        usetype = []
+        for model_type, models in basemodels.items():
+            if name in models:
+                usetype.append(model_type)
+        modtypelist = []
+        for modtype in usetype:
+            if modtype == "OpenAI":
+                modtypelist.append(OpenAIModelType)
+            elif modtype == "OpenAIVision":
+                modtypelist.append(OpenAIVisionModelType)
+            elif modtype == "AzureOpenAI":
+                modtypelist.append(AzureOpenAIModelType)
+            elif modtype == "Anthropic":
+                modtypelist.append(AnthropicModelType)
+        if len(modtypelist) > 1:
+            return tuple(modtypelist)
+        elif len(modtypelist) == 1:
+            return modtypelist[0]
+        
+
+class OpenAIModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "OpenAI")
+
+class OpenAIVisionModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "OpenAIVision")
+
+class AzureOpenAIModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "AzureOpenAI")
+
+class AnthropicModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "Anthropic")
 
 
 class LLMMessage(BaseModel):
@@ -59,6 +86,18 @@ class LLMMessage(BaseModel):
     Images: Optional[List[LLMImage]] = None
     TokensUsed: int = 0
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+
+    def __eq__(self, __value: object) -> bool:
+        # exclude timestamp from equality test
+        if isinstance(__value, self.__class__):
+            return (
+                self.Role == __value.Role
+                and self.Message == __value.Message
+                and self.Images == __value.Images
+                and self.TokensUsed == __value.TokensUsed
+            )
+        else:
+            return super().__eq__(__value)
 
     class Config:
         arbitrary_types_allowed = True
@@ -142,7 +181,6 @@ class LLMCaller(ABC, BaseModel):
     AFunc: Callable[..., Awaitable[Any]]
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
-    APIKey: Optional[str] = None
     Defaults: Dict = Field(default_factory=dict)
     Args: Optional[LLMCallArgs] = None
 
@@ -206,7 +244,7 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitError, ApiException],
+        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic],
     )
     def _call(self, *args, **kwargs):
         return self.Func(*args, **kwargs)
@@ -214,7 +252,7 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitError, ApiException],
+        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic],
     )
     async def _acall(self, *args, **kwargs):
         return await self.AFunc(*args, **kwargs)

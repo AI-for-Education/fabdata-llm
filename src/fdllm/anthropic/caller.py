@@ -2,28 +2,42 @@ import os
 from typing import List
 
 import anthropic
-from anthropic.tokenizer import get_tokenizer
+from anthropic._tokenizers import sync_get_tokenizer as get_tokenizer
 
 from ..llmtypes import (
-    LLMCaller, LLMCallArgs, ModelTypeLiteral, LLMModelType, LLMMessage
+    LLMCaller, LLMCallArgs, AnthropicModelType, LLMModelType, LLMMessage
 )
 
 class ClaudeCaller(LLMCaller):
     def __init__(
-        self, model: ModelTypeLiteral="claude-v1", api_key: str=os.environ["ANTHROPIC_KEY"]
+        self, model: str = "claude-2"
     ):
+        Modtype = LLMModelType.get_type(model)
+        if isinstance(Modtype, tuple):
+            raise ValueError(f"{model} is ambiguous type")
+        if Modtype not in [AnthropicModelType]:
+            raise ValueError(f"{model} is not supported")
+        
+        model_: LLMModelType = Modtype(Name=model)
+        if model_.Client_Args.get("api_key") is None:
+            model_.Client_Args["api_key"] = os.environ.get("ANTHROPIC_KEY")
+        
+        if Modtype in [AnthropicModelType]:
+            client = anthropic.Client(**model_.Client_Args)
+            aclient = anthropic.AsyncClient(**model_.Client_Args)
+            
         super().__init__(
             Model = LLMModelType(Name=model),
-            Func = anthropic.Client(api_key).completion,
-            AFunc = anthropic.Client(api_key).acompletion,
+            Func = client.completions.create,
+            AFunc = aclient.completions.create,
             Args = LLMCallArgs(
                 Model="model", Messages="prompt", Max_Tokens="max_tokens_to_sample"
             ),
-            APIKey = api_key,
             Defaults = {
                 "stop_sequence": [anthropic.HUMAN_PROMPT],
             },
-            Token_Window = 100000 if "-100k" in model else 8000
+            Token_Window = model_.Token_Window,
+            Token_Limit_Completion=model_.Token_Limit_Completion
         )
     
     def format_message(self, message: LLMMessage):
