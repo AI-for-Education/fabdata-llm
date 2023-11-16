@@ -54,7 +54,7 @@ Why you might consider using this:
         Sys_Msg={
             0: "This will appear at the start of the conversation"
             -1: "This will appear at the end of the conversation, after the user chat input"
-            -2: "This will appear at the end of the conversation, before the user chast input"
+            -2: "This will appear at the end of the conversation, before the user chat input"
         }
     )
     ```
