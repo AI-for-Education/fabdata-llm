@@ -11,7 +11,6 @@ Why you might consider using this:
     chatter = ChatController(caller=GPTCaller("gpt-3.5-turbo"))
 
     print(chatter.chat("Hello there"))
-    ### 
     ```
 
     ```python
