@@ -88,6 +88,7 @@ Why you might consider using this:
                     api_version: 2023-09-15-preview
                     api_key: my_azure_openai_api_key2
         ```
+    - WARNING: As with any plain text file containing API keys (such as a .env file), you should definitely not commit these files into any code repositories or otherwise share in an unsecured manner
 
     - After registering a custom model file, you can simply refer to the custom models by name when creating the LLMCaller object
 
@@ -100,7 +101,7 @@ Why you might consider using this:
         caller = GPTCaller("my_azure_deployment_1")
         ```
 
-    - Custom models configurations are deep-merged with the base model configuration, allowing you to set only a subset of custom values for an existing model (e.g. setting the individual api keys for gpt-3.5-turbo in the above example)
+    - Custom model configurations are deep-merged with the base model configuration, allowing you to set only a subset of custom values for an existing model (e.g. setting the individual api keys for gpt-3.5-turbo in the above example)
     - You can still use global environment variables if you prefer. The following environment variables will be recognised:
 
         ```env
