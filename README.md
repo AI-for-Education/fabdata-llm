@@ -1,4 +1,4 @@
-FabData-LLM is a set of high-level abstractions around various LLM API providers. It currently covers OpenAI, Azure OpenAI, and Anthropic.
+FabData-LLM is a set of high-level abstractions around various LLM API providers. It is written in python and currently covers OpenAI, Azure OpenAI, and Anthropic APIs.
 
 Why you might consider using this:
 - You want to create a chatbot with stored history and automatic history token management in 3 lines of code:
