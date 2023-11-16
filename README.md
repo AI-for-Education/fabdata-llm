@@ -8,7 +8,7 @@ Why you might consider using this:
     from fdllm import GPTCaller
     from fdllm.chat import ChatController
 
-    chatter = ChatController(caller=GPTCaller("gpt-3.5-turbo"))
+    chatter = ChatController(Caller=GPTCaller("gpt-3.5-turbo"))
 
     print(chatter.chat("Hello there"))
     ```
@@ -18,7 +18,7 @@ Why you might consider using this:
     from fdllm import ClaudeCaller
     from fdllm.chat import ChatController
 
-    chatter = ChatController(caller=ClaudeCaller("claude-2"))
+    chatter = ChatController(Caller=ClaudeCaller("claude-2"))
 
     print(chatter.chat("Hello there"))
     ```
@@ -28,7 +28,7 @@ Why you might consider using this:
     from fdllm import GPTVisionCaller
     from fdllm.chat import ChatController
 
-    chatter = ChatController(caller=GPTVisionCaller("gpt-4-vision-preview"))
+    chatter = ChatController(Caller=GPTVisionCaller("gpt-4-vision-preview"))
 
     ### load images here into a list of PIL Images
     # images : List[PIL.Image.Image]
@@ -49,7 +49,7 @@ Why you might consider using this:
         from fdllm.chat import ChatController
 
         chatter = ChatController(
-            caller=GPTCaller("gpt-3.5-turbo"),
+            Caller=GPTCaller("gpt-3.5-turbo"),
             Sys_Msg={
                 0: "This will appear at the start of the conversation"
                 -1: "This will appear at the end of the conversation, after the user chat input"
