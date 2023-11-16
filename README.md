@@ -2,6 +2,7 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
 
 Why you might consider using this:
 - You want to create a chatbot with stored history and automatic history token management in 3 lines of code:
+
     ```python
     # GPT 3.5 Turbo
     from fdllm import GPTCaller
@@ -12,6 +13,7 @@ Why you might consider using this:
     print(chatter.chat("Hello there"))
     ### 
     ```
+
     ```python
     # Claude 2
     from fdllm import ClaudeCaller
@@ -21,6 +23,7 @@ Why you might consider using this:
 
     print(chatter.chat("Hello there"))
     ```
+
     ```python
     # GPT 4 Vision Preview
     from fdllm import GPTVisionCaller
@@ -39,7 +42,9 @@ Why you might consider using this:
         )
     )
     ```
+
     - Customize system message placement (multiple system messages can lead to improved robustness against jailbreaks, for example)
+
     ```python
     from fdllm import GPTCaller
     from fdllm.chat import ChatController
@@ -53,9 +58,11 @@ Why you might consider using this:
         }
     )
     ```
+
     - Create plugins with the ```ChatPlugin``` abstract base class. Registered plugins have the ability to intercept and modify both user inputs and Caller responses during chat sessions, make their own LLM API calls, and mutate the state of the ChatController object
 - You want to switch between OpenAI API and multiple different Azure OpenAI endpoints without having to change global environment variable configurations and without having to deal with variations between the two APIs
     - Fabdata-LLM allows you to register custom model configuration yaml files with invidual endpoints, api keys, and other client arguments for each model
+
     ```yaml
     OpenAI:
         gpt-3.5-turbo:
@@ -82,7 +89,9 @@ Why you might consider using this:
                 api_version: 2023-09-15-preview
                 api_key: my_azure_openai_api_key2
     ```
+
     - After registering a custom model file, you can simply refer to the custom models by name when creating the LLMCaller object
+
     ```python
     from fdllm import GPTCaller
     from fdllm.sysutils import register_models
@@ -93,6 +102,7 @@ Why you might consider using this:
     ```
     - Custom models configurations are deep-merged with the base model configuration, allowing you to set only a subset of custom values for an existing model (e.g. setting the individual api keys for gpt-3.5-turbo in the above example)
     - You can still use global environment variables if you prefer. The following environment variables will be recognised:
+
     ```env
     # will apply globally to all models that use the OpenAI API
         OPENAI_API_KEY
@@ -103,6 +113,7 @@ Why you might consider using this:
     # will apply globally to all models that use the Anthropic API
         ANTHROPIC_KEY
     ``````
+    
 - You want to use the latest models from OpenAI, such as ```gpt-4-1106-preview``` and ```gpt-4-vision-preview```
     - FabData-LLM supports the latest versions of both OpenAI's and Anthropics's APIs (1.1.1 and 0.7.0 respectively at the time of writing) and the latest models, including multi-modal models
 - You want all of this functionality in both sync and async applications
