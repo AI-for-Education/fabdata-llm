@@ -5,30 +5,30 @@ Why you might consider using this:
 
     ```python
     # GPT 3.5 Turbo
-    from fdllm import GPTCaller
+    from fdllm import get_caller
     from fdllm.chat import ChatController
 
-    chatter = ChatController(Caller=GPTCaller("gpt-3.5-turbo"))
+    chatter = ChatController(Caller=get_caller("gpt-3.5-turbo"))
 
     print(chatter.chat("Hello there"))
     ```
 
     ```python
     # Claude 2
-    from fdllm import ClaudeCaller
+    from fdllm import get_caller
     from fdllm.chat import ChatController
 
-    chatter = ChatController(Caller=ClaudeCaller("claude-2"))
+    chatter = ChatController(Caller=get_caller("claude-2"))
 
     print(chatter.chat("Hello there"))
     ```
 
     ```python
     # GPT 4 Vision Preview
-    from fdllm import GPTVisionCaller
+    from fdllm import get_caller
     from fdllm.chat import ChatController
 
-    chatter = ChatController(Caller=GPTVisionCaller("gpt-4-vision-preview"))
+    chatter = ChatController(Caller=get_caller("gpt-4-vision-preview"))
 
     ### load images here into a list of PIL Images
     # images : List[PIL.Image.Image]
@@ -45,11 +45,11 @@ Why you might consider using this:
     - Customize system message placement (multiple system messages can lead to improved robustness against jailbreaks, for example)
 
         ```python
-        from fdllm import GPTCaller
+        from fdllm import get_caller
         from fdllm.chat import ChatController
 
         chatter = ChatController(
-            Caller=GPTCaller("gpt-3.5-turbo"),
+            Caller=get_caller("gpt-3.5-turbo"),
             Sys_Msg={
                 0: "This will appear at the start of the conversation"
                 -1: "This will appear at the end of the conversation, after the user chat input"
@@ -93,12 +93,12 @@ Why you might consider using this:
     - After registering a custom model file, you can simply refer to the custom models by name when creating the LLMCaller object
 
         ```python
-        from fdllm import GPTCaller
+        from fdllm import get_caller
         from fdllm.sysutils import register_models
         
         register_models("/path/to/my/custom/models.yaml")
 
-        caller = GPTCaller("my_azure_deployment_1")
+        caller = get_caller("my_azure_deployment_1")
         ```
 
     - Custom model configurations are deep-merged with the base model configuration, allowing you to set only a subset of custom values for an existing model (e.g. setting the individual api keys for gpt-3.5-turbo in the above example)
