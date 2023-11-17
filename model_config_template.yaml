@@ -1,0 +1,61 @@
+OpenAI:
+  model-name:
+    Token_Window: # required
+    Token_Limit_Completion:
+    Client_Args:
+      api_key:
+      organization:
+      base_url:
+      timeout:
+      max_retries:
+      default_headers:
+      default_query:
+      http_client:
+
+OpenAIVision:
+  model-name:
+    Token_Window: # required
+    Token_Limit_Completion:
+    Client_Args:
+      api_key:
+      organization:
+      base_url:
+      timeout:
+      max_retries:
+      default_headers:
+      default_query:
+      http_client:
+
+AzureOpenAI:
+  model-name:
+    Token_Window: # required
+    Token_Limit_Completion:
+    Client_Args:
+      azure_deployment:
+      api_version:
+      api_key:
+      azure_ad_token:
+      azure_ad_token_provider:
+      organization:
+      timeout:
+      max_retries:
+      default_headers:
+      default_query:
+      http_client:
+
+Anthropic:
+  model-name:
+    Token_Window: # required
+    Token_Limit_Completion:
+    Client_Args:
+      api_key:
+      auth_token:
+      base_url:
+      timeout:
+      max_retries:
+      default_headers:
+      default_query:
+      http_client:
+      transport:
+      proxies:
+      connection_pool_limits:

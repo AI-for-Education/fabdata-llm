@@ -1,6 +1,8 @@
-FabData-LLM is a set of high-level abstractions around various LLM API providers. It is written in python and currently covers OpenAI, Azure OpenAI, and Anthropic APIs.
+## Introduction
 
-Why you might consider using this:
+FabData-LLM is a set of high-level abstractions around various LLM API providers. It is written in Python and currently covers OpenAI, Azure OpenAI, and Anthropic APIs.
+
+### Why you might consider using this
 - You want to create a chatbot with stored history and automatic history token management in 3 lines of code:
 
     ```python
@@ -120,3 +122,51 @@ Why you might consider using this:
 - You want all of this functionality in both sync and async applications
     - All LLMCaller objects have two call methods: ```call``` and ```acall```
     - ChatController object has two chat methods: ```chat``` and ```achat```
+
+## How to use
+
+### Installation
+
+The easiest way to install is to use the dedicated conda environment provided in ```environment.yml```:
+```
+conda env create -f environment.yml
+```
+This creates a conda environment called ```fabdata-llm``` and installs the package along with dependencies inside it. See [Miniconda install](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html) for instructions on how to install conda if you don't already have it installed and [condas user guide](https://docs.conda.io/projects/conda/en/latest/user-guide/index.html) for a more general guide to using conda.
+
+You can also install into any existing python (3.10, or 3.11) environment by running:
+```
+pip install .
+```
+from inside the repository directory. If you encounter any dependency clashes then please feel free to report in the discussion and we will see if we can loosen any of the dependency restrictions.
+
+### Configuration
+The package comes with a base model configuration which can be extended by user-provided custom configurations. You can get the base model configuration dictionary by:
+```python
+from fdmml.sysutils import list_models
+
+models = list_models(full_info=True, base_only=True)
+```
+There are 4 categories of model:
+- OpenAI
+- OpenAIVision
+- AzureOpenAI
+- Anthropic
+
+A full template for a custom model configuration file can be found here: [model template](model_config_template.yaml). All fields except for those marked required are optional and can be omitted. Once created, models in the custom configuration can be added to the set of useable models by:
+```python
+from fdmml.sysutils import register_models
+
+register_models("/path/to/my/custom/models.yaml")
+```
+
+The configuration file is particularly useful for configuring multiple different Azure OpenAI deployments, as they will likely point to different endpoints and use different api keys. If you are only interested in setting global api keys for different providers, then the base model configuration is likely enough for your needs, and you can instead set the following environment variables:
+```env
+# will apply globally to all models that use the OpenAI API
+    OPENAI_API_KEY
+# will apply globally to all models that use the Azure OpenAI API
+    AZURE_OPENAI_API_KEY
+    AZURE_OPENAI_ENDPOINT
+    OPENAI_API_VERSION
+# will apply globally to all models that use the Anthropic API
+    ANTHROPIC_KEY
+``````

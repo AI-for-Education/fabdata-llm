@@ -8,7 +8,7 @@ from fdllm.llmtypes import LLMMessage, LLMImage
 from fdllm.chat import ChatController
 
 register_models(Path(__file__).parents[1] / "custom_models.yaml")
-print(list_models())
+print(list_models(full_info=True, base_only=True))
 
 ROOT = Path(__file__).parents[1]
 

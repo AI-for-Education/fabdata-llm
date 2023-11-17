@@ -9,9 +9,12 @@ HERE = Path(__file__).parent
 
 CUSTOM_MODELS = [{}]
 
-def list_models():
-    models = load_models()
-    return {key: list(val) for key, val in models.items()}
+def list_models(full_info=False, base_only=False):
+    models = load_models(base_only)
+    if full_info:
+        return models
+    else:
+        return {key: list(val) for key, val in models.items()}
 
 def register_models(modelfile: Union[str, os.PathLike]):
     modelfile = Path(modelfile)
@@ -29,12 +32,15 @@ def clear_model_register():
         CUSTOM_MODELS.pop()
 
 
-def load_models():
+def load_models(base_only=False):
     basemodelfile = HERE / "models.yaml"
     with open(basemodelfile) as f:
         basemodels = yaml.safe_load(f)
-    models = reduce(_deepmerge_models, [basemodels, *CUSTOM_MODELS])
-    return models
+    if base_only:
+        return basemodels
+    else:
+        models = reduce(_deepmerge_models, [basemodels, *CUSTOM_MODELS])
+        return models
 
 
 def _deepmerge_models(model1, model2):
