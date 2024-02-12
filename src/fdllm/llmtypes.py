@@ -82,8 +82,9 @@ class AnthropicModelType(LLMModelType):
 
 class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "tool", "error"]
-    Message: str
+    Message: Optional[str] = None
     Images: Optional[List[LLMImage]] = None
+    ToolCalls: Optional[List[LLMToolCall]] = None
     TokensUsed: int = 0
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
@@ -101,6 +102,12 @@ class LLMMessage(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+
+
+class LLMToolCall(BaseModel):
+    ID: str
+    Name: str
+    Message: str
 
 
 class LLMImage(BaseModel):

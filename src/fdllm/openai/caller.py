@@ -27,9 +27,9 @@ class GPTCaller(LLMCaller):
             raise ValueError(f"{model} is ambiguous type")
         if Modtype not in [OpenAIModelType, AzureOpenAIModelType]:
             raise ValueError(f"{model} is not supported")
-        
+
         model_: LLMModelType = Modtype(Name=model)
-        
+
         if Modtype in [OpenAIModelType]:
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
@@ -69,22 +69,19 @@ class GPTCaller(LLMCaller):
 
 
 class GPTVisionCaller(LLMCaller):
-    def __init__(
-        self,
-        model: str = "gpt-4-vision-preview"
-    ):
+    def __init__(self, model: str = "gpt-4-vision-preview"):
         Modtype = LLMModelType.get_type(model)
         if isinstance(Modtype, tuple):
             raise ValueError(f"{model} is ambiguous type")
         if Modtype not in [OpenAIVisionModelType]:
             raise ValueError(f"{model} is not supported")
-        
+
         model_: LLMModelType = Modtype(Name=model)
-        
+
         if Modtype in [OpenAIVisionModelType]:
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
-            
+
         super().__init__(
             Model=model_,
             Func=client.chat.completions.create,
@@ -125,9 +122,14 @@ class GPTVisionCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
-            return LLMMessage(
-                Role="assistant", Message=output.choices[0].message.content
-            )
+            msg = output.choices[0].message
+            if msg.content is not None:
+                return LLMMessage(Role="assistant", Message=msg.content)
+            elif msg.tool_calls is not None:
+                return LLMMessage(Role="tool", ToolCalls=msg.tool_calls)
+            else:
+                raise ValueError("Output must be either content or tool call")
+                
 
     def tokenize(self, messagelist: List[LLMMessage]):
         texttokens = tokenize_chatgpt_messages_v2(self.format_messagelist(messagelist))
