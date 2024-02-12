@@ -81,7 +81,7 @@ class AnthropicModelType(LLMModelType):
 
 
 class LLMMessage(BaseModel):
-    Role: Literal["user", "assistant", "system", "error"]
+    Role: Literal["user", "assistant", "system", "tool", "error"]
     Message: str
     Images: Optional[List[LLMImage]] = None
     TokensUsed: int = 0
