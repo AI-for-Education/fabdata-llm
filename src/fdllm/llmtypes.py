@@ -107,7 +107,8 @@ class LLMMessage(BaseModel):
 class LLMToolCall(BaseModel):
     ID: str
     Name: str
-    Message: str
+    Args: dict = Field(default_factory=dict)
+    Response: Optional[str] = None,
 
 
 class LLMImage(BaseModel):

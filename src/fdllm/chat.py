@@ -32,7 +32,7 @@ class ChatController(BaseModel):
 
     def chat(
         self,
-        prompt: str,
+        prompt: str = "",
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
         images: Optional[List[Image.Image]] = None,
         detail: Literal["low", "high"] = "low",
@@ -46,7 +46,7 @@ class ChatController(BaseModel):
         except:
             self._clean_plugins()
             raise
-        if new_message.Role == "error":
+        if new_message is not None and new_message.Role == "error":
             self._clean_plugins()
             return new_message, None
         result = self.Caller.call(latest_convo, max_tokens, **kwargs)
@@ -56,7 +56,7 @@ class ChatController(BaseModel):
 
     async def achat(
         self,
-        prompt: str,
+        prompt: str = "",
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
         images: Optional[List[Image.Image]] = None,
         detail: Literal["low", "high"] = "low",
@@ -70,7 +70,7 @@ class ChatController(BaseModel):
         except:
             await self._aclean_plugins()
             raise
-        if new_message.Role == "error":
+        if new_message is not None and new_message.Role == "error":
             await self._aclean_plugins()
             return new_message, None
         result = await self.Caller.acall(latest_convo, max_tokens, **kwargs)
@@ -105,7 +105,7 @@ class ChatController(BaseModel):
     def _prechat(self, prompt, max_tokens, images=None, detail="low"):
         images = LLMImage.list_from_images(images, detail=detail)
         final_prompt = self._clean(prompt)
-        if final_prompt in [LLM_EMPTY_QUESTION, LLM_INAPPROPRIATE_QUESTION]:
+        if final_prompt in [LLM_INAPPROPRIATE_QUESTION]:
             return (
                 LLMMessage(Role="error", Message=final_prompt),
                 [],
@@ -121,8 +121,6 @@ class ChatController(BaseModel):
             final_prompt = clean_prompt_string(build_prompt_string(prompt))
         else:
             final_prompt = prompt
-        if len(final_prompt) == 0:
-            return LLM_EMPTY_QUESTION
         if not self.Allow_Banned and contains_banned_words(final_prompt):
             return LLM_INAPPROPRIATE_QUESTION
         return final_prompt
@@ -137,7 +135,10 @@ class ChatController(BaseModel):
                 idx: LLMMessage(Role="system", Message=msg)
                 for idx, msg in self.Sys_Msg_Confirmation.items()
             }
-            latest_convo = [*self.History, new_message]
+            if new_message is not None:
+                latest_convo = [*self.History, new_message]
+            else:
+                latest_convo = [*self.History]
             for idx, msg in sorted(sys_msg_llmmsg.items()):
                 if idx in sys_msg_conf_llmmsg:
                     usemsg = [msg, sys_msg_conf_llmmsg[idx]]
@@ -155,7 +156,10 @@ class ChatController(BaseModel):
                     latest_convo = [*usemsg, *latest_convo]
             return latest_convo
 
-        new_message = LLMMessage(Role="user", Message=prompt, Images=images)
+        if prompt:
+            new_message = LLMMessage(Role="user", Message=prompt, Images=images)
+        else:
+            new_message = None
         latest_convo = build_messagelist()
         while (
             len(self.Caller.tokenize(latest_convo))
@@ -166,7 +170,7 @@ class ChatController(BaseModel):
                 latest_convo = build_messagelist()
             else:
                 raise LLMError(LLM_QUESTION_TOO_LONG)
-        if self.Keep_History:
+        if new_message is not None and self.Keep_History:
             self.History.append(new_message)
         return new_message, latest_convo
 

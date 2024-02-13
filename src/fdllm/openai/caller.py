@@ -1,12 +1,9 @@
-import os
-from typing import List, Any, Union, get_args
+from typing import List, Any
 from types import GeneratorType
-import base64
-from io import BytesIO
-from pathlib import Path
+import json
 
 from openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
-from PIL import Image
+
 
 from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2
 from ..llmtypes import (
@@ -17,6 +14,7 @@ from ..llmtypes import (
     AzureOpenAIModelType,
     LLMModelType,
     LLMMessage,
+    LLMToolCall,
 )
 
 
@@ -51,18 +49,35 @@ class GPTCaller(LLMCaller):
         )
 
     def format_message(self, message: LLMMessage):
-        return {"role": message.Role, "content": message.Message}
+        if message.Role == "tool":
+            return {
+                "role": "tool",
+                "tool_call_id": message.ToolCalls[0].ID,
+                "name": message.ToolCalls[0].Name,
+                "content": message.ToolCalls[0].Response,
+            }
+        elif message.Role == "assistant" and message.ToolCalls is not None:
+            return {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": message.ToolCalls[0].ID,
+                        "type": "function",
+                        "function": {
+                            "arguments": str(message.ToolCalls[0].Args),
+                            "name": message.ToolCalls[0].Name
+                        }
+                    }
+                ]
+            } 
+        else:
+            return {"role": message.Role, "content": message.Message}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         return [self.format_message(message) for message in messagelist]
 
     def format_output(self, output: Any):
-        if isinstance(output, GeneratorType):
-            return output
-        else:
-            return LLMMessage(
-                Role="assistant", Message=output.choices[0].message.content
-            )
+        return _gpt_common_fmt_output(output)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenize_chatgpt_messages(self.format_messagelist(messagelist))[0]
@@ -119,17 +134,7 @@ class GPTVisionCaller(LLMCaller):
         return [self.format_message(message) for message in messagelist]
 
     def format_output(self, output: Any):
-        if isinstance(output, GeneratorType):
-            return output
-        else:
-            msg = output.choices[0].message
-            if msg.content is not None:
-                return LLMMessage(Role="assistant", Message=msg.content)
-            elif msg.tool_calls is not None:
-                return LLMMessage(Role="tool", ToolCalls=msg.tool_calls)
-            else:
-                raise ValueError("Output must be either content or tool call")
-                
+        return _gpt_common_fmt_output(output)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         texttokens = tokenize_chatgpt_messages_v2(self.format_messagelist(messagelist))
@@ -140,3 +145,24 @@ class GPTVisionCaller(LLMCaller):
                     ntok = img.tokenize()
                     imgtokens += ntok
         return [None] * (texttokens + imgtokens)
+
+
+def _gpt_common_fmt_output(output):
+    if isinstance(output, GeneratorType):
+        return output
+    else:
+        msg = output.choices[0].message
+        if msg.content is not None:
+            return LLMMessage(Role="assistant", Message=msg.content)
+        elif msg.tool_calls is not None:
+            tcs = [
+                LLMToolCall(
+                    ID=tc.id,
+                    Name=tc.function.name,
+                    Args=json.loads(tc.function.arguments),
+                )
+                for tc in msg.tool_calls
+            ]
+            return LLMMessage(Role="assistant", ToolCalls=tcs)
+        else:
+            raise ValueError("Output must be either content or tool call")
