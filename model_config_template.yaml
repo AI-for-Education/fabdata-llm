@@ -43,6 +43,16 @@ AzureOpenAI:
       default_query:
       http_client:
 
+AzureMistralAI:
+  model-name:
+    Token_Window: # required
+    Token_Limit_Completion:
+    Client_Args:
+      api_key:
+      endpoint:
+      max_retries:
+      timeout:
+
 Anthropic:
   model-name:
     Token_Window: # required

@@ -1,6 +1,6 @@
 ## Introduction
 
-FabData-LLM is a set of high-level abstractions around various LLM API providers. It is written in Python and currently covers OpenAI, Azure OpenAI, and Anthropic APIs.
+FabData-LLM is a set of high-level abstractions around various LLM API providers. It is written in Python and currently covers OpenAI, Azure OpenAI, Anthropic, and Azure MistralAI APIs.
 
 ### Why you might consider using this
 - You want to create a chatbot with stored history and automatic history token management in 3 lines of code:
@@ -78,19 +78,27 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
                     api_key: my_openai_api_key3
 
         AzureOpenAI:
-            my_azure_deployment_1:
+            my_azure_openai_deployment_1:
                 Token_Window: 8192
                 Client_Args:
-                    azure_endpoint: https://my-endpoint-1.openai.azure.com/
+                    azure_endpoint: https://my-endpoint-1.openai.azure.com
                     api_version: 2023-09-15-preview
                     api_key: my_azure_openai_api_key1
-            my_azure_deployment_2:
+            my_azure_openai_deployment_2:
                 Token_Window: 32768
                 Client_Args:
-                    azure_endpoint: https://my-endpoint-2.openai.azure.com/
+                    azure_endpoint: https://my-endpoint-2.openai.azure.com
                     api_version: 2023-09-15-preview
                     api_key: my_azure_openai_api_key2
+        
+        AzureMistralAI:
+            my_azure_ai_deployment_1:
+            Token_Window: 32000
+            Client_Args:
+                endpoint: https://my-endpoint-1.my-region.inference.ai.azure.com
+                api_key: my_azure_ai_api_key1
         ```
+    - See `model_config_template.yaml ` for an overview of supported settings
     - WARNING: As with any plain text file containing API keys (such as a .env file), you should definitely not commit these files into any code repositories or otherwise share in an unsecured manner
 
     - After registering a custom model file, you can simply refer to the custom models by name when creating the LLMCaller object
@@ -115,11 +123,14 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
             AZURE_OPENAI_ENDPOINT
             OPENAI_API_VERSION
         # will apply globally to all models that use the Anthropic API
-            ANTHROPIC_KEY
+            ANTHROPIC_API_KEY
+        # will apply globally to all models that use the Mistral API
+            MISTRAL_API_KEY
         ``````
     
-- You want to use the latest models from OpenAI, such as ```gpt-4-1106-preview``` and ```gpt-4-vision-preview```
-    - FabData-LLM supports the latest versions of both OpenAI's and Anthropics's APIs (1.1.1 and 0.7.0 respectively at the time of writing) and the latest models, including multi-modal models
+- You want to use the latest models, such as ```gpt-4-0125-preview``` and ```gpt-4-vision-preview``` from OpenAI, ```claude-3-opus-20240229``` from Anthropic, and `Mistral-large` (hosted on Azure AI)
+    - FabData-LLM supports the latest versions of OpenAI's and Anthropics's APIs (1.12.0 and 0.18.1 respectively at the time of writing) and the latest models, including multi-modal models
+    - FabData-LLM supports Mistral AI models hosted on Azure AI endpoints
 - You want all of this functionality in both sync and async applications
     - All LLMCaller objects have two call methods: ```call``` and ```acall```
     - ChatController object has two chat methods: ```chat``` and ```achat```
