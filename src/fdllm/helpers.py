@@ -4,10 +4,13 @@ from .llmtypes import (
     OpenAIModelType,
     OpenAIVisionModelType,
     AnthropicModelType,
+    AnthropicVisionModelType,
     AzureOpenAIModelType,
+    AzureMistralAIModelType,
 )
 from .openai import GPTCaller, GPTVisionCaller
 from .anthropic import ClaudeCaller
+from .mistralai import MistralCaller
 
 def get_caller(model: str) -> LLMCaller:
     modeltype = LLMModelType.get_type(model)
@@ -17,6 +20,10 @@ def get_caller(model: str) -> LLMCaller:
         return GPTVisionCaller(model)
     elif modeltype in [AnthropicModelType]:
         return ClaudeCaller(model)
+    elif modeltype in [AnthropicVisionModelType]:
+        return ClaudeCaller(model)
+    elif modeltype in [AzureMistralAIModelType]:
+        return MistralCaller(model)
     elif isinstance(modeltype, tuple):
         raise NotImplementedError(
             f"{model} is not a unique name in model config."

@@ -27,6 +27,7 @@ class LLMModelType(BaseModel):
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Client_Args: dict = Field(default_factory=dict)
+    Flexible_SysMsg: bool = True
 
     def __init__(self, Name, model_type=None):
         if model_type is None:
@@ -55,7 +56,11 @@ class LLMModelType(BaseModel):
                 modtypelist.append(OpenAIVisionModelType)
             elif modtype == "AzureOpenAI":
                 modtypelist.append(AzureOpenAIModelType)
+            elif modtype == "AzureMistralAI":
+                modtypelist.append(AzureMistralAIModelType)
             elif modtype == "Anthropic":
+                modtypelist.append(AnthropicModelType)
+            elif modtype == "AnthropicVision":
                 modtypelist.append(AnthropicModelType)
         if len(modtypelist) > 1:
             return tuple(modtypelist)
@@ -75,9 +80,17 @@ class AzureOpenAIModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "AzureOpenAI")
 
+class AzureMistralAIModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "AzureMistralAI")
+
 class AnthropicModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "Anthropic")
+
+class AnthropicVisionModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "AnthropicVision")
 
 
 class LLMMessage(BaseModel):
@@ -100,8 +113,9 @@ class LLMMessage(BaseModel):
         else:
             return super().__eq__(__value)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
 
 
 class LLMToolCall(BaseModel):
@@ -172,8 +186,9 @@ class LLMImage(BaseModel):
             im = im.resize((finalwidth, finalheight), Image.BILINEAR)
         self.Img = im
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
 
 
 @dataclass(config=ConfigDict(validate_assignment=True))
@@ -295,4 +310,4 @@ class LiteralCaller(LLMCaller):
         return super().tokenize(messagelist)
 
 
-LLMMessage.update_forward_refs()
+LLMMessage.model_rebuild()

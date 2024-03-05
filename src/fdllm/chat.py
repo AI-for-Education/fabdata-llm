@@ -126,6 +126,15 @@ class ChatController(BaseModel):
         return final_prompt
 
     def _build_latest_convo(self, prompt, images, max_tokens):
+        if any(
+            val is not None
+            for val in [self.Sys_Msg.get(-1, None), self.Sys_Msg.get(-2, None)]
+        ):
+            if not self.Caller.Model.Flexible_SysMsg:
+                raise ValueError(
+                    f"Caller {self.Caller} doesn't support multiple system message placements"
+                )
+
         def build_messagelist():
             sys_msg_llmmsg = {
                 idx: LLMMessage(Role="system", Message=msg)
@@ -247,11 +256,8 @@ class ChatPlugin(ABC, BaseModel):
             setattr(self.Controller, attr, self._restore_vals[attr])
         self._restore_vals = {}
 
-    class Config:
-        underscore_attrs_are_private = True
 
-
-ChatController.update_forward_refs()
+ChatController.model_rebuild()
 
 
 class LLMError(Exception):

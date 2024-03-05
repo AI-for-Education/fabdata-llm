@@ -22,8 +22,28 @@ OpenAIVision:
 
 AzureOpenAI: {}
 
+AzureMistralAI: {}
+
 Anthropic:
-  claude-instant-1:
+  claude-instant-1.2:
     Token_Window: 100000
-  claude-2:
+    Token_Limit_Completion: 4096
+    Flexible_SysMsg: False
+  claude-2.0:
     Token_Window: 100000
+    Token_Limit_Completion: 4096
+    Flexible_SysMsg: False
+  claude-2.1:
+    Token_Window: 200000
+    Token_Limit_Completion: 4096
+    Flexible_SysMsg: False
+    
+AnthropicVision:
+  claude-3-opus-20240229:
+    Token_Window: 200000
+    Token_Limit_Completion: 4096
+    Flexible_SysMsg: False
+  claude-3-sonnet-20240229:
+    Token_Window: 200000
+    Token_Limit_Completion: 4096
+    Flexible_SysMsg: False

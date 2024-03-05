@@ -16,11 +16,11 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
     ```
 
     ```python
-    # Claude 2
+    # Claude 3
     from fdllm import get_caller
     from fdllm.chat import ChatController
 
-    chatter = ChatController(Caller=get_caller("claude-2"))
+    chatter = ChatController(Caller=get_caller("claude-3-opus-20240229"))
 
     print(chatter.chat("Hello there"))
     ```
@@ -59,6 +59,7 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
             }
         )
         ```
+        NOTE: This feature is not supported for Anthropic models, as they only accept a single system message. Setting any `Sys_Msg` key other than `0` will cause a `ValueError` at chat time with Anthropic callers
 
     - Create plugins with the ```ChatPlugin``` abstract base class. Registered plugins have the ability to intercept and modify both user inputs and Caller responses during chat sessions, make their own LLM API calls, and mutate the state of the ChatController object
 - You want to switch between OpenAI API and multiple different Azure OpenAI endpoints without having to change global environment variable configurations and without having to deal with variations between the two APIs
@@ -142,7 +143,7 @@ from inside the repository directory. If you encounter any dependency clashes th
 ### Configuration
 The package comes with a base model configuration which can be extended by user-provided custom configurations. You can get the base model configuration dictionary by:
 ```python
-from fdmml.sysutils import list_models
+from fdllm.sysutils import list_models
 
 models = list_models(full_info=True, base_only=True)
 ```
@@ -154,7 +155,7 @@ There are 4 categories of model:
 
 A full template for a custom model configuration file can be found here: [model template](model_config_template.yaml). All fields except for those marked required are optional and can be omitted. Once created, models in the custom configuration can be added to the set of useable models by:
 ```python
-from fdmml.sysutils import register_models
+from fdllm.sysutils import register_models
 
 register_models("/path/to/my/custom/models.yaml")
 ```
