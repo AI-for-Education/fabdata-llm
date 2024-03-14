@@ -14,7 +14,7 @@ class ToolParam(BaseModel):
     items: Optional[ToolParam] = None
     enum: Optional[List[str]] = None
     description: Optional[str] = None
-    required: bool
+    required: bool = False
     default: Optional[Any] = None
 
     def __init__(self, *args, **kwargs):
