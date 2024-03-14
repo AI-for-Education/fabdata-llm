@@ -9,18 +9,12 @@ from .llmtypes import LLMCaller, LLMMessage
 from .chat import ChatPlugin
 
 
-class ToolParam(BaseModel):
+class _ToolParamBase(BaseModel):
     type: Literal["string", "array", "integer", "number", "boolean", "null"]
     items: Optional[ToolParam] = None
     enum: Optional[List[str]] = None
     description: Optional[str] = None
-    required: bool = False
     default: Optional[Any] = None
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not self.required and self.default is None:
-            raise ValueError("Must provide default for non-required param")
 
     def dict(self):
         outdict = {"type": self.type}
@@ -33,6 +27,19 @@ class ToolParam(BaseModel):
         return outdict
 
 
+class ToolParam(_ToolParamBase):
+    required: bool = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.required and self.default is None:
+            raise ValueError("Must provide default for non-required param")
+
+
+class ToolItem(_ToolParamBase):
+    pass
+
+
 class Tool(ABC, BaseModel):
     name: ClassVar[str]
     description: ClassVar[str]
@@ -43,10 +50,16 @@ class Tool(ABC, BaseModel):
         pass
 
     @abstractmethod
-    def aexecute(self, **params):
+    async def aexecute(self, **params):
         pass
 
-    def validate_params(self, **params):
+    def _execute(self, **params):
+        return self.execute(self._validate_params(**params))
+
+    async def _aexecute(self, **params):
+        return await self.aexecute(self._validate_params(**params))
+
+    def _validate_params(self, **params):
         valid_params = {}
         for param, val in params.items():
             if param not in self.params:
@@ -93,9 +106,9 @@ class ToolUsePlugin(ChatPlugin):
         self.Controller.Caller.Defaults.pop("tools")
         if result.ToolCalls is None:
             return result
-        print(f"\n---------\n{result.ToolCalls}\n---------\n\n")
         resp = [
-            await self.tool_dict[tc.Name].aexecute(**tc.Args) for tc in result.ToolCalls
+            await self.tool_dict[tc.Name]._aexecute(**tc.Args)
+            for tc in result.ToolCalls
         ]
         self._post_chat_appender(resp)
         _, result = await self.Controller.achat("", *args, **kwargs)
@@ -105,8 +118,7 @@ class ToolUsePlugin(ChatPlugin):
         self.Controller.Caller.Defaults.pop("tools")
         if result.ToolCalls is None:
             return result
-        print(f"\n---------\n{result.ToolCalls}\n---------\n\n")
-        resp = [self.tool_dict[tc.Name].execute(**tc.Args) for tc in result.ToolCalls]
+        resp = [self.tool_dict[tc.Name]._execute(**tc.Args) for tc in result.ToolCalls]
         self._post_chat_appender(resp)
         _, result = self.Controller.chat("", *args, **kwargs)
         return result
