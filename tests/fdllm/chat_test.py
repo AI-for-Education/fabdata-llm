@@ -18,17 +18,19 @@ class TESTPLUGIN(ChatPlugin):
     Restore_Attrs: List[str] = ["Sys_Msg"]
     _history: List[LLMMessage] = PrivateAttr()
 
-    def pre_chat(self, prompt: str):
+    def pre_chat(self, prompt: str, *args, **kwargs):
         self.Controller.Sys_Msg = TEST_PLUGIN_SYSMSG
 
-    async def pre_achat(self, prompt: str):
+    async def pre_achat(self, prompt: str, *args, **kwargs):
         self.Controller.Sys_Msg = TEST_PLUGIN_SYSMSG
-
-    def post_chat(self):
+    
+    def post_chat(self, result: LLMMessage, *args, **kwargs):
         self._history = self.Controller.History.copy()
-
-    async def post_achat(self):
+        return result
+    
+    async def post_achat(self, result: LLMMessage, *args, **kwargs):
         self._history = self.Controller.History.copy()
+        return result
 
     def register(self):
         return super().register()
@@ -125,7 +127,7 @@ def test_plugin():
     assert plugin._history == controller.History
     controller._run_plugins(TEST_PROMPT_TEXT)
     assert controller.Sys_Msg == TEST_PLUGIN_SYSMSG
-    controller._clean_plugins()
+    controller._clean_plugins(result)
     assert controller.Sys_Msg == sys_msg
     controller.unregister_plugin(plugin)
     assert controller._plugins == []
@@ -145,7 +147,7 @@ async def test_aplugin(anyio_backend):
     assert plugin._history == controller.History
     await controller._arun_plugins(TEST_PROMPT_TEXT)
     assert controller.Sys_Msg == TEST_PLUGIN_SYSMSG
-    await controller._aclean_plugins()
+    await controller._aclean_plugins(result)
     assert controller.Sys_Msg == sys_msg
     controller.unregister_plugin(plugin)
     assert controller._plugins == []

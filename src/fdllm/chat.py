@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Literal, Optional, Any, Dict
+from typing import List, Literal, Optional, Any, Dict, ClassVar
 from abc import ABC, abstractmethod
 import copy
 
@@ -12,11 +12,6 @@ from .constants import (
     LLM_INAPPROPRIATE_QUESTION,
     LLM_DEFAULT_MAX_TOKENS,
 )
-from .prompt_helpers import (
-    clean_prompt_string,
-    build_prompt_string,
-    contains_banned_words,
-)
 from .llmtypes import LLMMessage, LLMCaller, LLMImage
 
 
@@ -25,8 +20,6 @@ class ChatController(BaseModel):
     History: List[LLMMessage] = Field(default_factory=list)
     Sys_Msg: Dict[Literal[0, -1, -2], str] = Field(default_factory=dict)
     Sys_Msg_Confirmation: Dict[Literal[0, -1, -2], str] = Field(default_factory=dict)
-    Clean_Prompt: bool = True
-    Allow_Banned: bool = False
     Keep_History: bool = True
     _plugins: List[ChatPlugin] = PrivateAttr(default_factory=list)
 
@@ -38,20 +31,20 @@ class ChatController(BaseModel):
         detail: Literal["low", "high"] = "low",
         **kwargs,
     ):
-        self._run_plugins(prompt)
+        self._run_plugins(prompt, max_tokens, images, detail, **kwargs)
         try:
             new_message, latest_convo = self._prechat(
                 prompt, max_tokens, images, detail
             )
         except:
-            self._clean_plugins()
+            self._clean_plugins(None, max_tokens, images, detail, **kwargs)
             raise
         if new_message is not None and new_message.Role == "error":
-            self._clean_plugins()
+            self._clean_plugins(None, max_tokens, images, detail, **kwargs)
             return new_message, None
         result = self.Caller.call(latest_convo, max_tokens, **kwargs)
         self._postchat(result)
-        self._clean_plugins()
+        result = self._clean_plugins(result, max_tokens, images, detail, **kwargs)
         return new_message, result
 
     async def achat(
@@ -62,20 +55,22 @@ class ChatController(BaseModel):
         detail: Literal["low", "high"] = "low",
         **kwargs,
     ):
-        await self._arun_plugins(prompt)
+        await self._arun_plugins(prompt, max_tokens, images, detail, **kwargs)
         try:
             new_message, latest_convo = self._prechat(
                 prompt, max_tokens, images, detail
             )
         except:
-            await self._aclean_plugins()
+            await self._aclean_plugins(None, max_tokens, images, detail, **kwargs)
             raise
         if new_message is not None and new_message.Role == "error":
-            await self._aclean_plugins()
+            await self._aclean_plugins(None, max_tokens, images, detail, **kwargs)
             return new_message, None
         result = await self.Caller.acall(latest_convo, max_tokens, **kwargs)
         self._postchat(result)
-        await self._aclean_plugins()
+        result = await self._aclean_plugins(
+            result, max_tokens, images, detail, **kwargs
+        )
         return new_message, result
 
     def register_plugin(self, plugin: ChatPlugin):
@@ -86,44 +81,36 @@ class ChatController(BaseModel):
         if plugin.Controller is self:
             plugin._unregister()
 
-    def _run_plugins(self, prompt):
+    def _run_plugins(self, prompt, *args, **kwargs):
         for plugin in self._plugins:
-            plugin._pre_chat(prompt)
+            plugin._pre_chat(prompt, *args, **kwargs)
 
-    async def _arun_plugins(self, prompt):
+    async def _arun_plugins(self, prompt, *args, **kwargs):
         for plugin in self._plugins:
-            await plugin._pre_achat(prompt)
+            await plugin._pre_achat(prompt, *args, **kwargs)
 
-    def _clean_plugins(self):
+    def _clean_plugins(self, result, *args, **kwargs):
         for plugin in reversed(self._plugins):
-            plugin._post_chat()
+            result = plugin._post_chat(result, *args, **kwargs)
+        return result
 
-    async def _aclean_plugins(self):
+    async def _aclean_plugins(self, result, *args, **kwargs):
         for plugin in reversed(self._plugins):
-            await plugin._post_achat()
+            result = await plugin._post_achat(result, *args, **kwargs)
+        return result
 
     def _prechat(self, prompt, max_tokens, images=None, detail="low"):
         images = LLMImage.list_from_images(images, detail=detail)
-        final_prompt = self._clean(prompt)
-        if final_prompt in [LLM_INAPPROPRIATE_QUESTION]:
+        if prompt in [LLM_INAPPROPRIATE_QUESTION]:
             return (
-                LLMMessage(Role="error", Message=final_prompt),
+                LLMMessage(Role="error", Message=prompt),
                 [],
             )
-        return self._build_latest_convo(final_prompt, images, max_tokens)
+        return self._build_latest_convo(prompt, images, max_tokens)
 
     def _postchat(self, result):
         if self.Keep_History:
             self.History.append(result)
-
-    def _clean(self, prompt):
-        if self.Clean_Prompt:
-            final_prompt = clean_prompt_string(build_prompt_string(prompt))
-        else:
-            final_prompt = prompt
-        if not self.Allow_Banned and contains_banned_words(final_prompt):
-            return LLM_INAPPROPRIATE_QUESTION
-        return final_prompt
 
     def _build_latest_convo(self, prompt, images, max_tokens):
         if any(
@@ -170,6 +157,7 @@ class ChatController(BaseModel):
         else:
             new_message = None
         latest_convo = build_messagelist()
+        x = 1
         while (
             len(self.Caller.tokenize(latest_convo))
             > self.Caller.Token_Window - max_tokens
@@ -200,20 +188,20 @@ class ChatPlugin(ABC, BaseModel):
         pass
 
     @abstractmethod
-    def pre_chat(self, prompt: str):
+    def pre_chat(self, prompt: str, *args, **kwargs):
         pass
 
     @abstractmethod
-    async def pre_achat(self, prompt: str):
+    async def pre_achat(self, prompt: str, *args, **kwargs):
         pass
 
     @abstractmethod
-    def post_chat(self):
-        pass
+    def post_chat(self, result: LLMMessage, *args, **kwargs):
+        return result
 
     @abstractmethod
-    async def post_achat(self):
-        pass
+    async def post_achat(self, result: LLMMessage, *args, **kwargs):
+        return result
 
     def _register(self):
         self._common_register()
@@ -231,30 +219,44 @@ class ChatPlugin(ABC, BaseModel):
         if self in self.Controller._plugins:
             self.Controller._plugins.remove(self)
 
-    def _pre_chat(self, prompt):
+    def _pre_chat(self, *args, **kwargs):
         self._common_pre_chat()
-        self.pre_chat(prompt)
+        self.pre_chat(*args, **kwargs)
 
-    async def _pre_achat(self, prompt):
+    async def _pre_achat(self, *args, **kwargs):
         self._common_pre_chat()
-        await self.pre_achat(prompt)
+        await self.pre_achat(*args, **kwargs)
 
-    def _post_chat(self):
-        self.post_chat()
+    def _post_chat(self, result, *args, **kwargs):
+        result = self.post_chat(result, *args, **kwargs)
         self._common_post_chat()
+        return result
 
-    async def _post_achat(self):
-        await self.post_achat()
+    async def _post_achat(self, result, *args, **kwargs):
+        result = await self.post_achat(result, *args, **kwargs)
         self._common_post_chat()
+        return result
 
     def _common_pre_chat(self):
         for attr in self.Restore_Attrs:
-            self._restore_vals[attr] = copy.deepcopy(getattr(self.Controller, attr))
+            obj, *_ = self._obj_from_string(attr)
+            self._restore_vals[attr] = copy.deepcopy(obj)
 
     def _common_post_chat(self):
         for attr in self.Restore_Attrs:
-            setattr(self.Controller, attr, self._restore_vals[attr])
+            _, parent, useattr = self._obj_from_string(attr)
+            setattr(parent, useattr, self._restore_vals[attr])
         self._restore_vals = {}
+
+    def _obj_from_string(self, string):
+        obj_names = string.split(".")
+        parent = self.Controller
+        obj = getattr(self.Controller, obj_names[0])
+        for objn in obj_names[1:]:
+            parent = obj
+            obj = getattr(obj, objn)
+        attr = obj_names[-1]
+        return obj, parent, attr
 
 
 ChatController.model_rebuild()
