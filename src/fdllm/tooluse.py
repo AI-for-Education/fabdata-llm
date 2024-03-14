@@ -11,8 +11,8 @@ from .chat import ChatPlugin
 
 class _ToolParamBase(BaseModel):
     type: Literal["string", "array", "integer", "number", "boolean", "null"]
-    items: Optional[ToolParam] = None
-    enum: Optional[List[str]] = None
+    items: Optional[ToolItem] = None
+    enum: Optional[List[Any]] = None
     description: Optional[str] = None
     default: Optional[Any] = None
 
@@ -83,6 +83,8 @@ class Tool(ABC, BaseModel):
                 },
             },
         }
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 class ToolUsePlugin(ChatPlugin):
