@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Literal, Optional, Any, Dict, ClassVar
+from typing import List, Literal, Optional, Any, Dict, ClassVar, Generator
 from abc import ABC, abstractmethod
 import copy
 
@@ -22,6 +22,37 @@ class ChatController(BaseModel):
     Sys_Msg_Confirmation: Dict[Literal[0, -1, -2], str] = Field(default_factory=dict)
     Keep_History: bool = True
     _plugins: List[ChatPlugin] = PrivateAttr(default_factory=list)
+
+    @property
+    def recent_history(self):
+        return next(iter(self.interactions(reverse=True)))
+
+    @property
+    def recent_tool_calls(self):
+        return next(iter(self.tool_calls(reverse=True)))
+
+    def interactions(self, reverse=False) -> Generator[List[LLMMessage]]:
+        histbuff = []
+        if reverse:
+            for msg in self.History[-1::-1]:
+                histbuff.append(msg)
+                if msg.Role == "user":
+                    yield histbuff[-1::-1]
+                    histbuff = []
+        else:
+            for msg in self.History:
+                histbuff.append(msg)
+                if msg.Role == "assistant" and msg.ToolCalls is None:
+                    yield histbuff
+                    histbuff = []
+
+    def tool_calls(self, reverse=False):
+        for interaction in self.interactions(reverse):
+            yield [
+                msg
+                for msg in interaction
+                if msg.ToolCalls is not None and msg.ToolCalls[0].Response is None
+            ]
 
     def chat(
         self,
