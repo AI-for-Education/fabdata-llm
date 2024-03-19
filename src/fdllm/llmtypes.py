@@ -122,7 +122,7 @@ class LLMToolCall(BaseModel):
     ID: str
     Name: str
     Args: dict = Field(default_factory=dict)
-    Response: Optional[str] = None,
+    Response: Optional[str] = None
 
 
 class LLMImage(BaseModel):

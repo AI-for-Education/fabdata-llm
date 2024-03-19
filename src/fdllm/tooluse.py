@@ -54,10 +54,10 @@ class Tool(ABC, BaseModel):
         pass
 
     def _execute(self, **params):
-        return self.execute(self._validate_params(**params))
+        return self.execute(**self._validate_params(**params))
 
     async def _aexecute(self, **params):
-        return await self.aexecute(self._validate_params(**params))
+        return await self.aexecute(**self._validate_params(**params))
 
     def _validate_params(self, **params):
         valid_params = {}
@@ -80,6 +80,9 @@ class Tool(ABC, BaseModel):
                 "parameters": {
                     "type": "object",
                     "properties": {key: val.dict() for key, val in self.params.items()},
+                    "required": [
+                        key for key, val in self.params.items() if val.required
+                    ],
                 },
             },
         }
@@ -89,7 +92,7 @@ class Tool(ABC, BaseModel):
 
 class ToolUsePlugin(ChatPlugin):
     Caller: Optional[LLMCaller] = None
-    Tools: ClassVar[List[Tool]]
+    Tools: List[Tool]
 
     def register(self):
         return super().register()
@@ -126,7 +129,7 @@ class ToolUsePlugin(ChatPlugin):
         return result
 
     async def pre_achat(self, prompt: str, *args, **kwargs):
-        return self.pre_chat()
+        return self.pre_chat(prompt, *args, **kwargs)
 
     def pre_chat(self, prompt: str, *args, **kwargs):
         self.Controller.Caller.Defaults["tools"] = self.dict()
