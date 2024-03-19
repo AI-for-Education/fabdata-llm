@@ -60,9 +60,23 @@ class MistralCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
-            return LLMMessage(
-                Role="assistant", Message=output.choices[0].message.content.lstrip()
-            )
+            msg = output.choices[0].message
+            if msg.content:
+                return LLMMessage(
+                    Role="assistant", Message=msg.content.lstrip()
+                )
+            elif msg.tool_calls is not None:
+                tcs = [
+                    LLMToolCall(
+                        ID=tc.id,
+                        Name=tc.function.name,
+                        Args=json.loads(tc.function.arguments),
+                    )
+                    for tc in msg.tool_calls
+                ]
+                return LLMMessage(Role="assistant", ToolCalls=tcs)
+            else:
+                raise ValueError("Output must be either content or tool call")
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return _tokenizer(self.format_messagelist(messagelist))
