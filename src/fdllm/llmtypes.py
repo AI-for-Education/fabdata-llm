@@ -14,7 +14,7 @@ from openai import RateLimitError as RateLimitErrorOpenAI
 from anthropic import RateLimitError as RateLimitErrorAnthropic
 from pydantic.dataclasses import dataclass
 from pydantic import ConfigDict, BaseModel, Field
-from PIL import Image
+from PIL import Image, ImageFile
 
 from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
@@ -173,6 +173,7 @@ class LLMImage(BaseModel):
         detail = self.Detail
         width, height = im.size
         if detail == "low":
+            ImageFile.LOAD_TRUNCATED_IMAGES = True
             im = im.resize((512, 512), Image.BILINEAR)
         else:
             maxdim = max(width, height)
