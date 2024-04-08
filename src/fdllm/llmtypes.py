@@ -147,7 +147,8 @@ class LLMImage(BaseModel):
         if self.Img is None:
             return
         bts = BytesIO()
-        self.Img.save(bts, format="png")
+        self.Img.convert('RGB').save(bts, format="png") 
+
         bts.seek(0)
         return base64.b64encode(bts.read()).decode("utf-8")
 
