@@ -3,6 +3,7 @@ from types import GeneratorType
 import json
 from contextlib import redirect_stdout, redirect_stderr
 import os
+import warnings
 
 with open(os.devnull, "w") as null:
     with redirect_stdout(null), redirect_stderr(null):
@@ -20,7 +21,19 @@ from ..llmtypes import (
     LLMToolCall,
 )
 
-tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
+try:
+    tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
+    MISTRALTOKENIZER = True
+except:
+    warnings.warn(
+        "Mistral 7b tokenizer can''t be downloaded."
+        " Falling back to GPT tokeniser so token counts might be inaccurate"
+        " for Mistral models."
+    )
+    MISTRALTOKENIZER = False
+    from ..openai.tokenizer import tokenize_chatgpt_messages
+
+    tokenizer = tokenize_chatgpt_messages
 
 
 class MistralCaller(LLMCaller):
@@ -62,9 +75,7 @@ class MistralCaller(LLMCaller):
         else:
             msg = output.choices[0].message
             if msg.content:
-                return LLMMessage(
-                    Role="assistant", Message=msg.content.lstrip()
-                )
+                return LLMMessage(Role="assistant", Message=msg.content.lstrip())
             elif msg.tool_calls is not None:
                 tcs = [
                     LLMToolCall(
@@ -84,4 +95,7 @@ class MistralCaller(LLMCaller):
 
 def _tokenizer(messagelist):
     outstrs = [f"role: {msg.role} content: {msg.content}" for msg in messagelist]
-    return tokenizer.encode("\n".join(outstrs))
+    if MISTRALTOKENIZER:
+        return tokenizer.encode("\n".join(outstrs))
+    else:
+        return tokenizer(outstrs)[0]
