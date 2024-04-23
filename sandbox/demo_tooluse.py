@@ -1,5 +1,6 @@
 # %%
 from pathlib import Path
+from typing import List
 
 from fdllm import get_caller
 from fdllm.sysutils import register_models, list_models
@@ -24,7 +25,7 @@ class TestTool(Tool):
 
 
 class MyToolUsePlugin(ToolUsePlugin):
-    Tools = [TestTool()]
+    Tools: List[Tool] = [TestTool()]
 
 
 # %%
