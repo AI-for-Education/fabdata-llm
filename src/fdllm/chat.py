@@ -30,6 +30,10 @@ class ChatController(BaseModel):
     @property
     def recent_tool_calls(self):
         return next(iter(self.tool_calls(reverse=True)))
+    
+    @property
+    def recent_tool_responses(self):
+        return next(iter(self.tool_responses(reverse=True)))
 
     def interactions(self, reverse=False) -> Generator[List[LLMMessage]]:
         histbuff = []
@@ -52,6 +56,14 @@ class ChatController(BaseModel):
                 msg
                 for msg in interaction
                 if msg.ToolCalls is not None and msg.ToolCalls[0].Response is None
+            ]
+    
+    def tool_responses(self, reverse=False):
+        for interaction in self.interactions(reverse):
+            yield [
+                msg
+                for msg in interaction
+                if msg.ToolCalls is not None and msg.ToolCalls[0].Response is not None
             ]
 
     def chat(
