@@ -50,31 +50,43 @@ class GPTCaller(LLMCaller):
 
     def format_message(self, message: LLMMessage):
         if message.Role == "tool":
-            return {
-                "role": "tool",
-                "tool_call_id": message.ToolCalls[0].ID,
-                "name": message.ToolCalls[0].Name,
-                "content": message.ToolCalls[0].Response,
-            }
+            return [
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.ID,
+                    "name": tc.Name,
+                    "content": tc.Response,
+                }
+                for tc in message.ToolCalls
+            ]
         elif message.Role == "assistant" and message.ToolCalls is not None:
             return {
                 "role": "assistant",
                 "tool_calls": [
                     {
-                        "id": message.ToolCalls[0].ID,
+                        "id": tc.ID,
                         "type": "function",
                         "function": {
-                            "arguments": str(message.ToolCalls[0].Args),
-                            "name": message.ToolCalls[0].Name
+                            "arguments": str(tc.Args),
+                            "name": tc.Name
                         }
                     }
+                    for tc in message.ToolCalls
                 ]
             } 
         else:
             return {"role": message.Role, "content": message.Message}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
-        return [self.format_message(message) for message in messagelist]
+        out = []
+        for message in messagelist:
+            outmsg = self.format_message(message)
+            if isinstance(outmsg, list):
+                out.extend(outmsg)
+            else:
+                out.append(outmsg)
+        return out
+            
 
     def format_output(self, output: Any):
         return _gpt_common_fmt_output(output)

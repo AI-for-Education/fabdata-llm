@@ -3,6 +3,7 @@
 FabData-LLM is a set of high-level abstractions around various LLM API providers. It is written in Python and currently covers OpenAI, Azure OpenAI, Anthropic, and Azure MistralAI APIs.
 
 ### Why you might consider using this
+
 - You want to create a chatbot with stored history and automatic history token management in 3 lines of code:
 
     ```python
@@ -11,8 +12,9 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
     from fdllm.chat import ChatController
 
     chatter = ChatController(Caller=get_caller("gpt-3.5-turbo"))
-
-    print(chatter.chat("Hello there"))
+    
+    inmsg, outmsg = chatter.chat("Hello there")
+    print(outmsg)
     ```
 
     ```python
@@ -22,7 +24,8 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
 
     chatter = ChatController(Caller=get_caller("claude-3-opus-20240229"))
 
-    print(chatter.chat("Hello there"))
+    inmsg, outmsg = chatter.chat("Hello there")
+    print(outmsg)
     ```
 
     ```python
@@ -35,13 +38,12 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
     ### load images here into a list of PIL Images
     # images : List[PIL.Image.Image]
 
-    print(
-        chatter.chat(
-            "Hello there, can you compare these images for me",
-            images=images,
-            detail="high"
-        )
+    inmsg, outmsg = chatter.chat(
+        "Hello there, can you compare these images for me",
+        images=images,
+        detail="high"
     )
+    print(outmsg)
     ```
 
     - Customize system message placement (multiple system messages can lead to improved robustness against jailbreaks, for example)
@@ -60,8 +62,67 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
         )
         ```
         NOTE: This feature is not supported for Anthropic models, as they only accept a single system message. Setting any `Sys_Msg` key other than `0` will cause a `ValueError` at chat time with Anthropic callers
+- You want to easily write new tools with code and definition schema all encapsulated in a single object, and call logic (including parallel calls and chaining of sequential calls) and parameter validation all handled automatically during chat.
 
-    - Create plugins with the ```ChatPlugin``` abstract base class. Registered plugins have the ability to intercept and modify both user inputs and Caller responses during chat sessions, make their own LLM API calls, and mutate the state of the ChatController object
+    ```python
+    from fdllm import get_caller
+    from fdllm.chat import ChatController
+    from fdllm.tooluse import ToolUsePlugin, Tool, ToolParam
+
+    class TestTool1(Tool):
+        name = "mul"
+        description = "Multiply 2 numbers"
+        params = {
+            "x": ToolParam(type="number", required=True),
+            "y": ToolParam(type="number", required=True),
+        }
+
+        def execute(self, **params):
+            res = params["x"] * params["y"]
+            return f"{res :.4f}"
+
+        async def aexecute(self, **params):
+            return self.execute()
+    
+
+    class TestTool2(Tool):
+        name = "add"
+        description = "Add 2 numbers"
+        params = {
+            "x": ToolParam(type="number", required=True),
+            "y": ToolParam(type="number", required=True),
+        }
+
+        def execute(self, **params):
+            res = params["x"] + params["y"]
+            return f"{res :.4f}"
+
+        async def aexecute(self, **params):
+            return self.execute()
+    
+
+    chatter = ChatController(Caller=get_caller("gpt-4-1106-preview"),)
+    chatter.register_plugin(
+        ToolUsePlugin(Tools=[TestTool1(), TestTool1()])
+    )
+
+    inmsg, outmsg = chatter.chat("(pi * 5.4) + (6 * e)")
+    print(outmsg)
+
+    # view the chat history, including the chain of tools calls
+    print(chatter.History)
+
+    # view the history of only the last conversational event (i.e. from user input to final response)
+    print(chatter.recent_history)
+
+    # view only the tool calls from the last conversational event (i.e. from user input to final response)
+    print(chatter.recent_tool_calls)
+
+    # view only the tool call responses from the last conversational event (i.e. from user input to final response)
+    print(chatter.recent_tool_responses)
+    ```
+
+    - As well as the provided ToolUsePlugin, create other types of plugin with the ```ChatPlugin``` abstract base class. Registered plugins have the ability to intercept and modify both user inputs and Caller responses during chat sessions, make their own LLM API calls, and mutate the state of the ChatController object
 - You want to switch between OpenAI API and multiple different Azure OpenAI endpoints without having to change global environment variable configurations and without having to deal with variations between the two APIs
     - Fabdata-LLM allows you to register custom model configuration yaml files with invidual endpoints, api keys, and other client arguments for each model
 
@@ -128,12 +189,15 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
             MISTRAL_API_KEY
         ``````
     
-- You want to use the latest models, such as ```gpt-4-0125-preview``` and ```gpt-4-vision-preview``` from OpenAI, ```claude-3-opus-20240229``` from Anthropic, and `Mistral-large` (hosted on Azure AI)
-    - FabData-LLM supports the latest versions of OpenAI's and Anthropics's APIs (1.12.0 and 0.18.1 respectively at the time of writing) and the latest models, including multi-modal models
+- You want to use the latest models, such as ```gpt-4-turbo-2024-04-09``` and ```gpt-4o``` from OpenAI, ```claude-3-opus-20240229``` from Anthropic, and `Mistral-large` (hosted on Azure AI)
+    - FabData-LLM supports the latest versions of OpenAI's and Anthropics's APIs (1.30.1 and 0.26.0 respectively at the time of writing) and the latest models, including multi-modal models
     - FabData-LLM supports Mistral AI models hosted on Azure AI endpoints
 - You want all of this functionality in both sync and async applications
     - All LLMCaller objects have two call methods: ```call``` and ```acall```
     - ChatController object has two chat methods: ```chat``` and ```achat```
+
+- You want to use well-tested code
+    - FabData-LLM currently has over 80% branch coverage in pytest
 
 ## How to use
 
@@ -158,11 +222,13 @@ from fdllm.sysutils import list_models
 
 models = list_models(full_info=True, base_only=True)
 ```
-There are 4 categories of model:
+There are 6 categories of model:
 - OpenAI
 - OpenAIVision
 - AzureOpenAI
 - Anthropic
+- AnthropicVision
+- AzureMistralAI
 
 A full template for a custom model configuration file can be found here: [model template](model_config_template.yaml). All fields except for those marked required are optional and can be omitted. Once created, models in the custom configuration can be added to the set of useable models by:
 ```python
@@ -181,4 +247,6 @@ The configuration file is particularly useful for configuring multiple different
     OPENAI_API_VERSION
 # will apply globally to all models that use the Anthropic API
     ANTHROPIC_KEY
+# will apply globally to all models that use the Mistral API
+    MISTRAL_API_KEY
 ``````

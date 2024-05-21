@@ -2,6 +2,8 @@ OpenAI:
   model-name:
     Token_Window: # required
     Token_Limit_Completion:
+    Flexible_Sys_Msg:
+    Tool_Use:
     Client_Args:
       api_key:
       organization:
@@ -16,6 +18,8 @@ OpenAIVision:
   model-name:
     Token_Window: # required
     Token_Limit_Completion:
+    Flexible_Sys_Msg:
+    Tool_Use:
     Client_Args:
       api_key:
       organization:
@@ -30,6 +34,8 @@ AzureOpenAI:
   model-name:
     Token_Window: # required
     Token_Limit_Completion:
+    Flexible_Sys_Msg:
+    Tool_Use:
     Client_Args:
       azure_deployment:
       api_version:
@@ -47,6 +53,8 @@ AzureMistralAI:
   model-name:
     Token_Window: # required
     Token_Limit_Completion:
+    Flexible_Sys_Msg:
+    Tool_Use:
     Client_Args:
       api_key:
       endpoint:
@@ -57,6 +65,8 @@ Anthropic:
   model-name:
     Token_Window: # required
     Token_Limit_Completion:
+    Flexible_Sys_Msg:
+    Tool_Use:
     Client_Args:
       api_key:
       auth_token:

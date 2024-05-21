@@ -27,6 +27,7 @@ class LLMModelType(BaseModel):
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Client_Args: dict = Field(default_factory=dict)
+    Tool_Use: bool = False
     Flexible_SysMsg: bool = True
 
     def __init__(self, Name, model_type=None):
@@ -61,7 +62,7 @@ class LLMModelType(BaseModel):
             elif modtype == "Anthropic":
                 modtypelist.append(AnthropicModelType)
             elif modtype == "AnthropicVision":
-                modtypelist.append(AnthropicModelType)
+                modtypelist.append(AnthropicVisionModelType)
         if len(modtypelist) > 1:
             return tuple(modtypelist)
         elif len(modtypelist) == 1:

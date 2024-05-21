@@ -5,8 +5,26 @@ from typing import Optional, List, Literal, Any, Dict, ClassVar
 from abc import ABC, abstractmethod
 
 from pydantic import BaseModel
-from .llmtypes import LLMCaller, LLMMessage
+from .llmtypes import (
+    LLMCaller,
+    LLMMessage,
+    LLMModelType,
+    OpenAIModelType,
+    OpenAIVisionModelType,
+    AnthropicModelType,
+    AnthropicVisionModelType,
+    AzureOpenAIModelType,
+    AzureMistralAIModelType,
+)
 from .chat import ChatPlugin
+
+
+class ToolMissingParamError(Exception):
+    pass
+
+
+class ToolInvalidParamError(Exception):
+    pass
 
 
 class _ToolParamBase(BaseModel):
@@ -63,29 +81,50 @@ class Tool(ABC, BaseModel):
         valid_params = {}
         for param, val in params.items():
             if param not in self.params:
-                raise ValueError(f"Invalid parameter {param}")
+                raise ToolInvalidParamError(f"Invalid parameter {param}")
             else:
                 valid_params[param] = val
         for param, val in self.params.items():
             if val.required and param not in params:
-                raise ValueError(f"Required param {param} not present")
+                raise ToolMissingParamError(f"Required param {param} not present")
         return valid_params
 
-    def dict(self):
-        return {
-            "type": "function",
-            "function": {
+    def dict(self, model="gpt-4-1106-preview"):
+        Modtype = LLMModelType.get_type(model)
+        if Modtype in (
+            OpenAIModelType,
+            OpenAIVisionModelType,
+            AzureOpenAIModelType,
+            AzureMistralAIModelType,
+        ):
+            return {
+                "type": "function",
+                "function": {
+                    "name": self.name,
+                    "description": self.description,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            key: val.dict() for key, val in self.params.items()
+                        },
+                        "required": [
+                            key for key, val in self.params.items() if val.required
+                        ],
+                    },
+                },
+            }
+        elif Modtype in (AnthropicModelType, AnthropicVisionModelType):
+            return {
                 "name": self.name,
                 "description": self.description,
-                "parameters": {
+                "input_schema": {
                     "type": "object",
                     "properties": {key: val.dict() for key, val in self.params.items()},
                     "required": [
                         key for key, val in self.params.items() if val.required
                     ],
                 },
-            },
-        }
+            }
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -93,9 +132,15 @@ class Tool(ABC, BaseModel):
 class ToolUsePlugin(ChatPlugin):
     Caller: Optional[LLMCaller] = None
     Tools: List[Tool]
+    _tool_attempt: int = 0
+    _max_tool_attempt: int = 5
 
     def register(self):
-        return super().register()
+        super().register()
+        model = self.Controller.Caller.Model.Name
+        modeltype = LLMModelType.get_type(model)(model)
+        if not modeltype.Tool_Use:
+            raise NotImplementedError(f"{model} doesn''t support tool use")
 
     def unregister(self):
         return super().unregister()
@@ -111,31 +156,58 @@ class ToolUsePlugin(ChatPlugin):
         self.Controller.Caller.Defaults.pop("tools")
         if result.ToolCalls is None:
             return result
-        resp = [
-            await self.tool_dict[tc.Name]._aexecute(**tc.Args)
-            for tc in result.ToolCalls
-        ]
+        try:
+            resp = [
+                await self.tool_dict[tc.Name]._aexecute(**tc.Args)
+                for tc in result.ToolCalls
+            ]
+        except:
+            self._tool_attempt += 1
+            self.Controller.History.pop()
+            prompt = self.Controller.History.pop()
+            if self._tool_attempt > self._max_tool_attempt:
+                raise
+            _, result = await self.Controller.achat(prompt.Message, *args, **kwargs)
+            self._tool_attempt = 0
+            return result
         self._post_chat_appender(resp)
         _, result = await self.Controller.achat("", *args, **kwargs)
+        self._tool_attempt = 0
         return result
 
     def post_chat(self, result: LLMMessage, *args, **kwargs):
         self.Controller.Caller.Defaults.pop("tools")
         if result.ToolCalls is None:
             return result
-        resp = [self.tool_dict[tc.Name]._execute(**tc.Args) for tc in result.ToolCalls]
+        try:
+            resp = [
+                self.tool_dict[tc.Name]._execute(**tc.Args) for tc in result.ToolCalls
+            ]
+        except:
+            self._tool_attempt += 1
+            self.Controller.History.pop()
+            prompt = self.Controller.History.pop()
+            if self._tool_attempt > self._max_tool_attempt:
+                self._tool_attempt = 0
+                raise
+            _, result = self.Controller.chat(prompt.Message, *args, **kwargs)
+            self._tool_attempt = 0
+            return result
         self._post_chat_appender(resp)
         _, result = self.Controller.chat("", *args, **kwargs)
+        self._tool_attempt = 0
         return result
 
     async def pre_achat(self, prompt: str, *args, **kwargs):
         return self.pre_chat(prompt, *args, **kwargs)
 
     def pre_chat(self, prompt: str, *args, **kwargs):
-        self.Controller.Caller.Defaults["tools"] = self.dict()
+        self.Controller.Caller.Defaults["tools"] = self.dict(
+            self.Controller.Caller.Model.Name
+        )
 
-    def dict(self):
-        return [tool.dict() for tool in self.Tools]
+    def dict(self, model="gpt-4-1106-preview"):
+        return [tool.dict(model) for tool in self.Tools]
 
     @property
     def tool_dict(self):

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tools.setuptools]
+packages = [{include = "src"}]
+
+[tool.setuptools.package-data]
+"*" = ["models.yaml"]
+
+[project]
+name = "fabdata-llm"
+version = "0.17.0"
+requires-python = ">=3.10, <=3.12"
+dependencies = [
+    "pydantic == 2.*",
+    "python-dotenv == 1.*",
+    "openai >= 1.12, == 1.30.*",
+    "anthropic == 0.26.*",
+    "tiktoken == 0.2.*",
+    "pytest == 7.2.*",
+    "pytest-cov == 4.0.*",
+    "pytest-dotenv == 0.5.*",
+    "aiofiles == 23.1.*",
+    "pillow == 9.5.*",
+    "numpy == 1.26.*",
+    "mistralai == 0.1.*",
+    "pyyaml",
+    "transformers == 4.38.*"
+]

@@ -22,6 +22,8 @@ def get_caller(model: str) -> LLMCaller:
         return ClaudeCaller(model)
     elif modeltype in [AnthropicVisionModelType]:
         return ClaudeCaller(model)
+    elif modeltype in [AnthropicVisionModelType]:
+        return ClaudeCaller(model)
     elif modeltype in [AzureMistralAIModelType]:
         return MistralCaller(model)
     elif isinstance(modeltype, tuple):
