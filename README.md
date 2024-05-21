@@ -103,7 +103,7 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
 
     chatter = ChatController(Caller=get_caller("gpt-4-1106-preview"),)
     chatter.register_plugin(
-        ToolUsePlugin(Tools=[TestTool1(), TestTool1()])
+        ToolUsePlugin(Tools=[TestTool1(), TestTool2()])
     )
 
     inmsg, outmsg = chatter.chat("(pi * 5.4) + (6 * e)")
