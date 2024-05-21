@@ -122,6 +122,8 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
     print(chatter.recent_tool_responses)
     ```
 
+    - See [**FabData-LLM-retrieval**](https://github.com/AI-for-Education/fabdata-llm-retrieval) for a more complex example of ToolUsePlugin for implementing a Retrieval-Augmented Generation system
+
     - As well as the provided ToolUsePlugin, create other types of plugin with the ```ChatPlugin``` abstract base class. Registered plugins have the ability to intercept and modify both user inputs and Caller responses during chat sessions, make their own LLM API calls, and mutate the state of the ChatController object
 - You want to switch between OpenAI API and multiple different Azure OpenAI endpoints without having to change global environment variable configurations and without having to deal with variations between the two APIs
     - Fabdata-LLM allows you to register custom model configuration yaml files with invidual endpoints, api keys, and other client arguments for each model
