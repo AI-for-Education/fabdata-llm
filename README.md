@@ -62,7 +62,11 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
         )
         ```
         NOTE: This feature is not supported for Anthropic models, as they only accept a single system message. Setting any `Sys_Msg` key other than `0` will cause a `ValueError` at chat time with Anthropic callers
-- You want to easily write new tools with code and definition schema all encapsulated in a single object, and call logic (including parallel calls and chaining of sequential calls) and parameter validation all handled automatically during chat.
+- You want to easily write new tools with code and definition schema all encapsulated in a single object, and call logic (including parallel calls and chaining of sequential calls) and parameter validation all handled automatically during chat. 
+
+    One of the major inconveniences with writing tools is that the tool definition schemas and the actual functions that they call aren't connected to each other in any way. The `Tool` class in FabData-LLM brings the two things together in a single object. Tool description schemas are automatically generated from the parameters according to different formats (currently only supports OpenAI's and Anthropic's formats), and function execution is wrapped in parameter validation steps. This makes debugging easier as you can more easily identify formatting errors in tool call instructions returned by LLMs.
+
+    The `ToolUsePlugin` class lets you connect a tool or set of tools to a `ChatController` object. It automatically handles all of the logic of passing tool definition schemas, intercepting tool call instructions, executing tool calls, and communicating the results back to the LLM. Parallel tool calls and sequential tool calls are also handled automatically. It currently supports all tool-enambled models from OpenAI and Anthropic (`gpt-3.5-turbo-1106`, `gpt-3.5-turbo-0125`, `gpt-4-1106-preview`, `gpt-4-0125-preview`, `gpt-4-turbo-2024-04-09`, `gpt-4o-2024-05-13`, `claude-3-opus-20240229`, `claude-3-sonnet-20240229`, `claude-3-haiku-20240307`). Any custom models from the OpenAI or Anthropic families that are known to support tool use can be used if set with the parameter `Tool_Use: True` in the model config file.
 
     ```python
     from fdllm import get_caller
@@ -122,9 +126,9 @@ FabData-LLM is a set of high-level abstractions around various LLM API providers
     print(chatter.recent_tool_responses)
     ```
 
-    - See [**FabData-LLM-retrieval**](https://github.com/AI-for-Education/fabdata-llm-retrieval) for a more complex example of ToolUsePlugin for implementing a Retrieval-Augmented Generation system
+    - See [**FabData-LLM-retrieval**](https://github.com/AI-for-Education/fabdata-llm-retrieval) for a more complex example of `ToolUsePlugin` for implementing a Retrieval-Augmented Generation system
 
-    - As well as the provided ToolUsePlugin, create other types of plugin with the ```ChatPlugin``` abstract base class. Registered plugins have the ability to intercept and modify both user inputs and Caller responses during chat sessions, make their own LLM API calls, and mutate the state of the ChatController object
+    - As well as the provided `ToolUsePlugin`, create other types of plugin with the ```ChatPlugin``` abstract base class. Registered plugins have the ability to intercept and modify both user inputs and Caller responses during chat sessions, make their own LLM API calls, and mutate the state of the ChatController object
 - You want to switch between OpenAI API and multiple different Azure OpenAI endpoints without having to change global environment variable configurations and without having to deal with variations between the two APIs
     - Fabdata-LLM allows you to register custom model configuration yaml files with invidual endpoints, api keys, and other client arguments for each model
 
@@ -252,3 +256,7 @@ The configuration file is particularly useful for configuring multiple different
 # will apply globally to all models that use the Mistral API
     MISTRAL_API_KEY
 ``````
+
+### Usage
+
+The [sandbox](./sandbox) folder contains examples of different use cases.
