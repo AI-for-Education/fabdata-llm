@@ -28,6 +28,7 @@ class LLMModelType(BaseModel):
     Token_Limit_Completion: Optional[int] = None
     Client_Args: dict = Field(default_factory=dict)
     Tool_Use: bool = False
+    Vision: bool = False
     Flexible_SysMsg: bool = True
 
     def __init__(self, Name, model_type=None):
@@ -53,8 +54,6 @@ class LLMModelType(BaseModel):
         for modtype in usetype:
             if modtype == "OpenAI":
                 modtypelist.append(OpenAIModelType)
-            elif modtype == "OpenAIVision":
-                modtypelist.append(OpenAIVisionModelType)
             elif modtype == "AzureOpenAI":
                 modtypelist.append(AzureOpenAIModelType)
             elif modtype == "AzureMistralAI":
@@ -72,10 +71,6 @@ class LLMModelType(BaseModel):
 class OpenAIModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "OpenAI")
-
-class OpenAIVisionModelType(LLMModelType):
-    def __init__(self, Name):
-        super().__init__(Name, "OpenAIVision")
 
 class AzureOpenAIModelType(LLMModelType):
     def __init__(self, Name):

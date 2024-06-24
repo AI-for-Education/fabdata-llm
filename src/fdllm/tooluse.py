@@ -10,7 +10,6 @@ from .llmtypes import (
     LLMMessage,
     LLMModelType,
     OpenAIModelType,
-    OpenAIVisionModelType,
     AnthropicModelType,
     AnthropicVisionModelType,
     AzureOpenAIModelType,
@@ -93,7 +92,6 @@ class Tool(ABC, BaseModel):
         Modtype = LLMModelType.get_type(model)
         if Modtype in (
             OpenAIModelType,
-            OpenAIVisionModelType,
             AzureOpenAIModelType,
             AzureMistralAIModelType,
         ):

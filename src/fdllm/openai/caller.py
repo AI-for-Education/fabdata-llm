@@ -10,7 +10,6 @@ from ..llmtypes import (
     LLMCaller,
     LLMCallArgs,
     OpenAIModelType,
-    OpenAIVisionModelType,
     AzureOpenAIModelType,
     LLMModelType,
     LLMMessage,
@@ -49,6 +48,7 @@ class GPTCaller(LLMCaller):
         )
 
     def format_message(self, message: LLMMessage):
+        ### Handle tool results
         if message.Role == "tool":
             return [
                 {
@@ -59,6 +59,7 @@ class GPTCaller(LLMCaller):
                 }
                 for tc in message.ToolCalls
             ]
+        ### Handle assistant tool calls messages
         elif message.Role == "assistant" and message.ToolCalls is not None:
             return {
                 "role": "assistant",
@@ -66,14 +67,34 @@ class GPTCaller(LLMCaller):
                     {
                         "id": tc.ID,
                         "type": "function",
-                        "function": {
-                            "arguments": str(tc.Args),
-                            "name": tc.Name
-                        }
+                        "function": {"arguments": str(tc.Args), "name": tc.Name},
                     }
                     for tc in message.ToolCalls
-                ]
-            } 
+                ],
+            }
+        ### Handle user messages which contain images
+        elif message.Role == "user" and message.Images is not None:
+            if not self.Model.Vision:
+                raise NotImplementedError(
+                    f"Tried to pass images but {self.Model.Name} doesn't support images"
+                )
+            return [
+                {"type": "text", "text": message.Message},
+                *[
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": (
+                                im.Url
+                                if im.Url is not None
+                                else f"data:image/png;base64,{im.encode()}"
+                            ),
+                            "detail": im.Detail,
+                        },
+                    }
+                    for im in message.Images
+                ],
+            ]
         else:
             return {"role": message.Role, "content": message.Message}
 
@@ -86,77 +107,24 @@ class GPTCaller(LLMCaller):
             else:
                 out.append(outmsg)
         return out
-            
 
     def format_output(self, output: Any):
         return _gpt_common_fmt_output(output)
 
     def tokenize(self, messagelist: List[LLMMessage]):
-        return tokenize_chatgpt_messages(self.format_messagelist(messagelist))[0]
-
-
-class GPTVisionCaller(LLMCaller):
-    def __init__(self, model: str = "gpt-4-vision-preview"):
-        Modtype = LLMModelType.get_type(model)
-        if isinstance(Modtype, tuple):
-            raise ValueError(f"{model} is ambiguous type")
-        if Modtype not in [OpenAIVisionModelType]:
-            raise ValueError(f"{model} is not supported")
-
-        model_: LLMModelType = Modtype(Name=model)
-
-        if Modtype in [OpenAIVisionModelType]:
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
-
-        super().__init__(
-            Model=model_,
-            Func=client.chat.completions.create,
-            AFunc=aclient.chat.completions.create,
-            Args=LLMCallArgs(
-                Model="model",
-                Messages="messages",
-                Max_Tokens="max_tokens",
-            ),
-            Defaults={},
-            Token_Window=model_.Token_Window,
-            Token_Limit_Completion=model_.Token_Limit_Completion,
-        )
-
-    def format_message(self, message: LLMMessage):
-        content = [{"type": "text", "text": message.Message}]
-        if message.Images is not None:
-            content += [
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": (
-                            im.Url
-                            if im.Url is not None
-                            else f"data:image/png;base64,{im.encode()}"
-                        ),
-                        "detail": im.Detail,
-                    },
-                }
-                for im in message.Images
-            ]
-        return {"role": message.Role, "content": content}
-
-    def format_messagelist(self, messagelist: List[LLMMessage]):
-        return [self.format_message(message) for message in messagelist]
-
-    def format_output(self, output: Any):
-        return _gpt_common_fmt_output(output)
-
-    def tokenize(self, messagelist: List[LLMMessage]):
-        texttokens = tokenize_chatgpt_messages_v2(self.format_messagelist(messagelist))
-        imgtokens = 0
-        for msg in messagelist:
-            if msg.Images is not None:
-                for img in msg.Images:
-                    ntok = img.tokenize()
-                    imgtokens += ntok
-        return [None] * (texttokens + imgtokens)
+        if self.Model.Vision:
+            texttokens = tokenize_chatgpt_messages_v2(
+                self.format_messagelist(messagelist)
+            )
+            imgtokens = 0
+            for msg in messagelist:
+                if msg.Images is not None:
+                    for img in msg.Images:
+                        ntok = img.tokenize()
+                        imgtokens += ntok
+            return [None] * (texttokens + imgtokens)
+        else:
+            return tokenize_chatgpt_messages(self.format_messagelist(messagelist))[0]
 
 
 def _gpt_common_fmt_output(output):

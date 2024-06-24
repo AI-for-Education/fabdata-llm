@@ -2,13 +2,12 @@ from .llmtypes import (
     LLMModelType,
     LLMCaller,
     OpenAIModelType,
-    OpenAIVisionModelType,
     AnthropicModelType,
     AnthropicVisionModelType,
     AzureOpenAIModelType,
     AzureMistralAIModelType,
 )
-from .openai import GPTCaller, GPTVisionCaller
+from .openai import GPTCaller
 from .anthropic import ClaudeCaller
 from .mistralai import MistralCaller
 
@@ -16,8 +15,6 @@ def get_caller(model: str) -> LLMCaller:
     modeltype = LLMModelType.get_type(model)
     if modeltype in [OpenAIModelType, AzureOpenAIModelType]:
         return GPTCaller(model)
-    elif modeltype in [OpenAIVisionModelType]:
-        return GPTVisionCaller(model)
     elif modeltype in [AnthropicModelType]:
         return ClaudeCaller(model)
     elif modeltype in [AnthropicVisionModelType]:

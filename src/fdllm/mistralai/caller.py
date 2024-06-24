@@ -1,13 +1,7 @@
 from typing import List, Any
 from types import GeneratorType
 import json
-from contextlib import redirect_stdout, redirect_stderr
-import os
-import warnings
 
-with open(os.devnull, "w") as null:
-    with redirect_stdout(null), redirect_stderr(null):
-        from transformers import AutoTokenizer
 from mistralai.client import MistralClient
 from mistralai.async_client import MistralAsyncClient
 from mistralai.models.chat_completion import ChatMessage
@@ -21,19 +15,12 @@ from ..llmtypes import (
     LLMToolCall,
 )
 
-try:
-    tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
-    MISTRALTOKENIZER = True
-except:
-    warnings.warn(
-        "Mistral 7b tokenizer can''t be downloaded."
-        " Falling back to GPT tokeniser so token counts might be inaccurate"
-        " for Mistral models."
-    )
-    MISTRALTOKENIZER = False
-    from ..openai.tokenizer import tokenize_chatgpt_messages
+#NOTE: Removed attempt to download mistral tokenizer from huggingface
+# now always uses gpt tokenizer
+MISTRALTOKENIZER = False
+from ..openai.tokenizer import tokenize_chatgpt_messages
 
-    tokenizer = tokenize_chatgpt_messages
+tokenizer = tokenize_chatgpt_messages
 
 
 class MistralCaller(LLMCaller):

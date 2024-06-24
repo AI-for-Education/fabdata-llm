@@ -1,1 +1,1 @@
-from .caller import GPTCaller, GPTVisionCaller
+from .caller import GPTCaller

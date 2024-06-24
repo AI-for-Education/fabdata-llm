@@ -2,7 +2,7 @@ import pytest
 from types import SimpleNamespace
 from pathlib import Path
 
-from fdllm import GPTCaller, GPTVisionCaller
+from fdllm import GPTCaller
 from fdllm.llmtypes import LLMMessage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.sysutils import register_models
@@ -30,7 +30,7 @@ def test_init_openai(model):
 
 @pytest.mark.parametrize("model", TEST_VISION_MODELS)
 def test_init_openaivision(model):
-    GPTVisionCaller(model=model)
+    GPTCaller(model=model)
 
 @pytest.mark.parametrize(
     "role, expected",

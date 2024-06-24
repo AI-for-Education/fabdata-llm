@@ -165,3 +165,4 @@ custom_models.yaml
 .DS_Store
 src/.DS_Store
 src/fdllm/.DS_Store
+.vscode

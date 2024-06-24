@@ -3,6 +3,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 from itertools import product
 from typing import List
+from pathlib import Path
 
 from pydantic import PrivateAttr
 
@@ -10,7 +11,10 @@ from fdllm.chat import ChatController, ChatPlugin
 from fdllm import GPTCaller, ClaudeCaller
 from fdllm.llmtypes import LLMMessage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
+from fdllm.sysutils import register_models
 from fdllm.constants import LLM_DEFAULT_MAX_TOKENS
+
+register_models(Path.home() / ".fdllm/custom_models.yaml")
 
 TEST_PLUGIN_SYSMSG = {0: "A", -1: "B", -2: "C"}
 

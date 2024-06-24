@@ -31,23 +31,26 @@ OpenAI:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
+    Vision: True
   gpt-4-turbo:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
+    Vision: True
   gpt-4o-2024-05-13:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
+    Vision: True
   gpt-4o:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
-
-OpenAIVision:
+    Vision: True
   gpt-4-vision-preview:
     Token_Window: 128000
     Token_Limit_Completion: 4096
+    Vision: True
 
 AzureOpenAI: {}
 
@@ -73,13 +76,16 @@ AnthropicVision:
     Token_Limit_Completion: 4096
     Flexible_SysMsg: False
     Tool_Use: True
+    Vision: True
   claude-3-sonnet-20240229:
     Token_Window: 200000
     Token_Limit_Completion: 4096
     Flexible_SysMsg: False
     Tool_Use: True
+    Vison: True
   claude-3-haiku-20240307:
     Token_Window: 200000
     Token_Limit_Completion: 4096
     Flexible_SysMsg: False
     Tool_Use: True
+    Vision: True
