@@ -230,7 +230,6 @@ models = list_models(full_info=True, base_only=True)
 ```
 There are 6 categories of model:
 - OpenAI
-- OpenAIVision
 - AzureOpenAI
 - Anthropic
 - AnthropicVision

@@ -14,22 +14,6 @@ OpenAI:
       default_query:
       http_client:
 
-OpenAIVision:
-  model-name:
-    Token_Window: # required
-    Token_Limit_Completion:
-    Flexible_Sys_Msg:
-    Tool_Use:
-    Client_Args:
-      api_key:
-      organization:
-      base_url:
-      timeout:
-      max_retries:
-      default_headers:
-      default_query:
-      http_client:
-
 AzureOpenAI:
   model-name:
     Token_Window: # required
