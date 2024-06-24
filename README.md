@@ -228,7 +228,7 @@ from fdllm.sysutils import list_models
 
 models = list_models(full_info=True, base_only=True)
 ```
-There are 6 categories of model:
+There are 5 categories of model:
 - OpenAI
 - AzureOpenAI
 - Anthropic
