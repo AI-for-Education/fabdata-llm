@@ -78,7 +78,7 @@ class GPTCaller(LLMCaller):
                 raise NotImplementedError(
                     f"Tried to pass images but {self.Model.Name} doesn't support images"
                 )
-            return [
+            content = [
                 {"type": "text", "text": message.Message},
                 *[
                     {
@@ -95,6 +95,7 @@ class GPTCaller(LLMCaller):
                     for im in message.Images
                 ],
             ]
+            return {"role": message.Role, "content": content}
         else:
             return {"role": message.Role, "content": message.Message}
 
