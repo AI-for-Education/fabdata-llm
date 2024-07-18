@@ -170,7 +170,7 @@ def _get_google_token():
     if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
         f = NamedTemporaryFile("w+t", delete=False)
         try:
-            cred_json_str = os.environ.get("GOOGLE_AUTH_JSON")
+            cred_json_str = os.environ.get("GOOGLE_AUTH_JSON").replace("\\n", "\n")
             cred_json = json.loads(cred_json_str)
             json.dump(cred_json, f)
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
