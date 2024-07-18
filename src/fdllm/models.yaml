@@ -31,23 +31,26 @@ OpenAI:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
+    Vision: True
   gpt-4-turbo:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
+    Vision: True
   gpt-4o-2024-05-13:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
+    Vision: True
   gpt-4o:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
-
-OpenAIVision:
+    Vision: True
   gpt-4-vision-preview:
     Token_Window: 128000
     Token_Limit_Completion: 4096
+    Vision: True
 
 AzureOpenAI: {}
 
@@ -83,3 +86,35 @@ AnthropicVision:
     Token_Limit_Completion: 4096
     Flexible_SysMsg: False
     Tool_Use: True
+  
+VertexAI:
+  gemini-1.5-flash-001:
+    Token_Window: 1048576
+    Token_Limit_Completion: 8192
+    Flexible_SysMsg: True
+    Tool_Use: True
+    Vision: True
+  gemini-1.5-pro-001:
+    Token_Window: 2097152
+    Token_Limit_Completion: 8192
+    Flexible_SysMsg: True
+    Tool_Use: True
+    Vision: True
+  gemini-1.0-pro-001:
+    Token_Window: 32760
+    Token_Limit_Completion: 8192
+    Flexible_SysMsg: True
+    Tool_Use: True
+    Vision: False
+  gemini-1.0-pro-002:
+    Token_Window: 32760
+    Token_Limit_Completion: 8192
+    Flexible_SysMsg: True
+    Tool_Use: True
+    Vision: False
+  gemini-1.0-pro-vision-001:
+    Token_Window: 16384
+    Token_Limit_Completion: 2048
+    Flexible_SysMsg: True
+    Tool_Use: True
+    Vision: True

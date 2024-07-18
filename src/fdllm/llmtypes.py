@@ -53,8 +53,6 @@ class LLMModelType(BaseModel):
         for modtype in usetype:
             if modtype == "OpenAI":
                 modtypelist.append(OpenAIModelType)
-            elif modtype == "OpenAIVision":
-                modtypelist.append(OpenAIVisionModelType)
             elif modtype == "AzureOpenAI":
                 modtypelist.append(AzureOpenAIModelType)
             elif modtype == "AzureMistralAI":
@@ -63,6 +61,8 @@ class LLMModelType(BaseModel):
                 modtypelist.append(AnthropicModelType)
             elif modtype == "AnthropicVision":
                 modtypelist.append(AnthropicVisionModelType)
+            elif modtype == "AzureOpenAI":
+                modtypelist.append(AzureOpenAIModelType)
         if len(modtypelist) > 1:
             return tuple(modtypelist)
         elif len(modtypelist) == 1:
@@ -72,10 +72,6 @@ class LLMModelType(BaseModel):
 class OpenAIModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "OpenAI")
-
-class OpenAIVisionModelType(LLMModelType):
-    def __init__(self, Name):
-        super().__init__(Name, "OpenAIVision")
 
 class AzureOpenAIModelType(LLMModelType):
     def __init__(self, Name):
@@ -92,6 +88,10 @@ class AnthropicModelType(LLMModelType):
 class AnthropicVisionModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "AnthropicVision")
+
+class VertexAIModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "VertexAI")
 
 
 class LLMMessage(BaseModel):
