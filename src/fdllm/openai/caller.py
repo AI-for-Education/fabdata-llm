@@ -1,9 +1,14 @@
 from typing import List, Any
 from types import GeneratorType
 import json
+import os
+import time
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
-
+from google.auth import default
+from google.auth.transport import requests
 
 from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2
 from ..llmtypes import (
@@ -36,8 +41,10 @@ class GPTCaller(LLMCaller):
             aclient = AsyncAzureOpenAI(azure_deployment=model, **model_.Client_Args)
         elif Modtype in [VertexAIModelType]:
             model_.Name = f"google/{model_.Name}"
+            if "api_key" not in model_.Client_Args:
+                model_.Client_Args["api_key"] = _get_google_token()
             client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)            
+            aclient = AsyncOpenAI(**model_.Client_Args)
         super().__init__(
             Model=model_,
             Func=client.chat.completions.create,
@@ -152,3 +159,30 @@ def _gpt_common_fmt_output(output):
             return LLMMessage(Role="assistant", ToolCalls=tcs)
         else:
             raise ValueError("Output must be either content or tool call")
+
+def _get_google_token():
+    def get_token():
+        creds, _ = default()
+        auth_req = requests.Request()
+        creds.refresh(auth_req)
+        return creds.token
+        
+    if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+        f = NamedTemporaryFile("w+t", delete=False)
+        try:
+            cred_json_str = os.environ.get("GOOGLE_AUTH_JSON")
+            cred_json = json.loads(cred_json_str)
+            json.dump(cred_json, f)
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
+            f.close()
+            token = get_token()
+            Path(f.name).unlink()
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
+        except Exception as e:
+            print(e)
+            Path(f.name).unlink()
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
+            token = None
+    else:
+        token = get_token()
+    return token

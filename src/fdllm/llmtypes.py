@@ -64,6 +64,8 @@ class LLMModelType(BaseModel):
                 modtypelist.append(AnthropicVisionModelType)
             elif modtype == "AzureOpenAI":
                 modtypelist.append(AzureOpenAIModelType)
+            elif modtype == "VertexAI":
+                modtypelist.append(VertexAIModelType)
         if len(modtypelist) > 1:
             return tuple(modtypelist)
         elif len(modtypelist) == 1:
