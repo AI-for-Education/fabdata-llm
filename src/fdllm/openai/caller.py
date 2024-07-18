@@ -176,14 +176,11 @@ def _get_google_token():
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
             f.close()
             token = get_token()
-            try:
-                Path(f.name).unlink()
-            except:
-                time.sleep(0.5)
-                Path(f.name).unlink()
+            Path(f.name).unlink()
             os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
         except Exception as e:
             print(e)
+            f.close()
             Path(f.name).unlink()
             os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
             token = None
