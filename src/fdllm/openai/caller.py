@@ -10,6 +10,7 @@ from ..llmtypes import (
     LLMCaller,
     LLMCallArgs,
     OpenAIModelType,
+    VertexAIModelType,
     AzureOpenAIModelType,
     LLMModelType,
     LLMMessage,
@@ -22,7 +23,7 @@ class GPTCaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         if isinstance(Modtype, tuple):
             raise ValueError(f"{model} is ambiguous type")
-        if Modtype not in [OpenAIModelType, AzureOpenAIModelType]:
+        if Modtype not in [OpenAIModelType, AzureOpenAIModelType, VertexAIModelType]:
             raise ValueError(f"{model} is not supported")
 
         model_: LLMModelType = Modtype(Name=model)
@@ -33,6 +34,10 @@ class GPTCaller(LLMCaller):
         elif Modtype in [AzureOpenAIModelType]:
             client = AzureOpenAI(azure_deployment=model, **model_.Client_Args)
             aclient = AsyncAzureOpenAI(azure_deployment=model, **model_.Client_Args)
+        elif Modtype in [VertexAIModelType]:
+            model_.Name = f"google/{model_.Name}"
+            client = OpenAI(**model_.Client_Args)
+            aclient = AsyncOpenAI(**model_.Client_Args)            
         super().__init__(
             Model=model_,
             Func=client.chat.completions.create,
