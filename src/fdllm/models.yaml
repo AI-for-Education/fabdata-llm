@@ -32,29 +32,34 @@ OpenAI:
     Token_Limit_Completion: 4096
     Tool_Use: True
     Vision: True
-    Vision: True
   gpt-4-turbo:
     Token_Window: 128000
     Token_Limit_Completion: 4096
     Tool_Use: True
     Vision: True
+  gpt-4o-mini-2024-07-18:
+    Token_Window: 128000
+    Token_Limit_Completion: 16000
+    Tool_Use: True
     Vision: True
   gpt-4o-2024-05-13:
     Token_Window: 128000
-    Token_Limit_Completion: 4096
+    Token_Limit_Completion: 16000
     Tool_Use: True
     Vision: True
+  gpt-4o-mini:
+    Token_Window: 128000
+    Token_Limit_Completion: 16000
+    Tool_Use: True
     Vision: True
   gpt-4o:
     Token_Window: 128000
-    Token_Limit_Completion: 4096
+    Token_Limit_Completion: 16000
     Tool_Use: True
-    Vision: True
     Vision: True
   gpt-4-vision-preview:
     Token_Window: 128000
     Token_Limit_Completion: 4096
-    Vision: True
     Vision: True
 
 AzureOpenAI: {}
