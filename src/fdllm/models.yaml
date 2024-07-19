@@ -44,7 +44,7 @@ OpenAI:
     Vision: True
   gpt-4o-2024-05-13:
     Token_Window: 128000
-    Token_Limit_Completion: 16000
+    Token_Limit_Completion: 4096
     Tool_Use: True
     Vision: True
   gpt-4o-mini:
@@ -54,7 +54,7 @@ OpenAI:
     Vision: True
   gpt-4o:
     Token_Window: 128000
-    Token_Limit_Completion: 16000
+    Token_Limit_Completion: 4096
     Tool_Use: True
     Vision: True
   gpt-4-vision-preview:
