@@ -52,7 +52,7 @@ class GPTCaller(LLMCaller):
             Args=LLMCallArgs(
                 Model="model",
                 Messages="messages",
-                Max_Tokens="max_tokens",
+                Max_Tokens="max_completion_tokens",
             ),
             Defaults={},
             Token_Window=model_.Token_Window,
