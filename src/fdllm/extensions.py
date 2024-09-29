@@ -44,6 +44,7 @@ def general_query(
     reduce_callback=None,
     images=[],
     detail="low",
+    **call_kwargs,
 ):
     if caller is None:
         caller = get_caller("gpt-4")
@@ -63,7 +64,9 @@ def general_query(
                 msg = _gen_message(jsonin, jsonout, images)
                 ntok = len(caller.tokenize([msg]))
                 max_tokens = caller.Token_Window - ntok
-    out = caller.call(msg, max_tokens=max_tokens, temperature=temperature)
+    out = caller.call(
+        msg, max_tokens=max_tokens, temperature=temperature, **call_kwargs
+    )
 
     try:
         return ADict(json.loads(_trim_nonjson(out.Message)))
