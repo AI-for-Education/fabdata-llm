@@ -29,7 +29,7 @@ class GPTCaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         if isinstance(Modtype, tuple):
             raise ValueError(f"{model} is ambiguous type")
-        if Modtype not in [OpenAIModelType, AzureOpenAIModelType, VertexAIModelType]:
+        if Modtype not in [OpenAIModelType, AzureOpenAIModelType, VertexAIModelType, OpenRouterModelType]:
             raise ValueError(f"{model} is not supported")
 
         model_: LLMModelType = Modtype(Name=model)
@@ -51,7 +51,7 @@ class GPTCaller(LLMCaller):
                 raise ValueError(f"{model._Name} must begin with or- for OpenRouter models")
             if "api_key" not in model_.Client_Args:
                 raise ValueError("api_key must be defined in yaml config for OpenRouter models")
-            model_.Name = model_.Name[3:]
+            model_.Name = model_.Model_Prefix+"/"+model_.Name[3:]
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
             

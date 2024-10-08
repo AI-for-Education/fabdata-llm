@@ -26,6 +26,7 @@ class LLMModelType(BaseModel):
     Name: Optional[str]
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
+    Model_Prefix: Optional[str] = ""
     Client_Args: dict = Field(default_factory=dict)
     Tool_Use: bool = False
     Vision: bool = False
