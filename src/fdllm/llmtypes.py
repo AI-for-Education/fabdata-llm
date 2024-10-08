@@ -66,6 +66,8 @@ class LLMModelType(BaseModel):
                 modtypelist.append(AzureOpenAIModelType)
             elif modtype == "VertexAI":
                 modtypelist.append(VertexAIModelType)
+            elif modtype == "OpenRouter":
+                modtypelist.append(OpenRouterModelType)
         if len(modtypelist) > 1:
             return tuple(modtypelist)
         elif len(modtypelist) == 1:
@@ -96,6 +98,9 @@ class VertexAIModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "VertexAI")
 
+class OpenRouterModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "OpenRouter")
 
 class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "tool", "error"]

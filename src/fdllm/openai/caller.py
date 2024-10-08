@@ -17,6 +17,7 @@ from ..llmtypes import (
     OpenAIModelType,
     VertexAIModelType,
     AzureOpenAIModelType,
+    OpenRouterModelType,
     LLMModelType,
     LLMMessage,
     LLMToolCall,
@@ -45,6 +46,15 @@ class GPTCaller(LLMCaller):
                 model_.Client_Args["api_key"] = _get_google_token()
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
+        elif Modtype in [OpenRouterModelType]:
+            if model_.Name[:3] != "or-":
+                raise ValueError(f"{model._Name} must begin with or- for OpenRouter models")
+            if "api_key" not in model_.Client_Args:
+                raise ValueError("api_key must be defined in yaml config for OpenRouter models")
+            model_.Name = model_.Name[3:]
+            client = OpenAI(**model_.Client_Args)
+            aclient = AsyncOpenAI(**model_.Client_Args)
+            
         super().__init__(
             Model=model_,
             Func=client.chat.completions.create,
