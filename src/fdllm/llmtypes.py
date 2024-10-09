@@ -69,6 +69,10 @@ class LLMModelType(BaseModel):
                 modtypelist.append(VertexAIModelType)
             elif modtype == "OpenRouter":
                 modtypelist.append(OpenRouterModelType)
+            elif modtype == "Groq":
+                modtypelist.append(GroqModelType)
+            elif modtype == "Fireworks":
+                modtypelist.append(FireworksModelType)
         if len(modtypelist) > 1:
             return tuple(modtypelist)
         elif len(modtypelist) == 1:
@@ -102,6 +106,14 @@ class VertexAIModelType(LLMModelType):
 class OpenRouterModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "OpenRouter")
+
+class GroqModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "Groq")
+
+class FireworksModelType(LLMModelType):
+    def __init__(self, Name):
+        super().__init__(Name, "Fireworks")
 
 class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "tool", "error"]

@@ -18,6 +18,8 @@ from ..llmtypes import (
     VertexAIModelType,
     AzureOpenAIModelType,
     OpenRouterModelType,
+    GroqModelType,
+    FireworksModelType,
     LLMModelType,
     LLMMessage,
     LLMToolCall,
@@ -29,7 +31,14 @@ class GPTCaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         if isinstance(Modtype, tuple):
             raise ValueError(f"{model} is ambiguous type")
-        if Modtype not in [OpenAIModelType, AzureOpenAIModelType, VertexAIModelType, OpenRouterModelType]:
+        if Modtype not in [
+            OpenAIModelType,
+            AzureOpenAIModelType,
+            VertexAIModelType,
+            OpenRouterModelType,
+            GroqModelType,
+            FireworksModelType,
+        ]:
             raise ValueError(f"{model} is not supported")
 
         model_: LLMModelType = Modtype(Name=model)
@@ -48,22 +57,57 @@ class GPTCaller(LLMCaller):
             aclient = AsyncOpenAI(**model_.Client_Args)
         elif Modtype in [OpenRouterModelType]:
             if model_.Name[:3] != "or-":
-                raise ValueError(f"{model._Name} must begin with or- for OpenRouter models")
+                raise ValueError(
+                    f"{model._Name} must begin with or- for OpenRouter models"
+                )
             if "api_key" not in model_.Client_Args:
-                raise ValueError("api_key must be defined in yaml config for OpenRouter models")
-            model_.Name = model_.Model_Prefix+"/"+model_.Name[3:]
+                raise ValueError(
+                    "api_key must be defined in yaml config for OpenRouter models"
+                )
+            model_.Name = model_.Model_Prefix + "/" + model_.Name[3:]
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
-            
+        elif Modtype in [GroqModelType]:
+            if model_.Name[:5] != "groq-":
+                raise ValueError(f"{model._Name} must begin with groq- for Groq models")
+            if "api_key" not in model_.Client_Args:
+                raise ValueError(
+                    "api_key must be defined in yaml config for Groq models"
+                )
+            model_.Name = model_.Name[5:]
+            client = OpenAI(**model_.Client_Args)
+            aclient = AsyncOpenAI(**model_.Client_Args)
+        elif Modtype in [FireworksModelType]:
+            if model_.Name[:3] != "fw-":
+                raise ValueError(
+                    f"{model._Name} must begin with fw- for Firework models"
+                )
+            if "api_key" not in model_.Client_Args:
+                raise ValueError(
+                    "api_key must be defined in yaml config for Firework models"
+                )
+            model_.Name = model_.Model_Prefix + "/" + model_.Name[3:]
+            client = OpenAI(**model_.Client_Args)
+            aclient = AsyncOpenAI(**model_.Client_Args)
+
+        if Modtype in [FireworksModelType, GroqModelType]:
+            call_args = LLMCallArgs(
+                Model="model",
+                Messages="messages",
+                Max_Tokens="max_tokens",
+            )
+        else:
+            call_args = LLMCallArgs(
+                Model="model",
+                Messages="messages",
+                Max_Tokens="max_completion_tokens",
+            )
+
         super().__init__(
             Model=model_,
             Func=client.chat.completions.create,
             AFunc=aclient.chat.completions.create,
-            Args=LLMCallArgs(
-                Model="model",
-                Messages="messages",
-                Max_Tokens="max_completion_tokens",
-            ),
+            Args=call_args,
             Defaults={},
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
@@ -170,13 +214,14 @@ def _gpt_common_fmt_output(output):
         else:
             raise ValueError("Output must be either content or tool call")
 
+
 def _get_google_token():
     def get_token():
         creds, _ = default()
         auth_req = requests.Request()
         creds.refresh(auth_req)
         return creds.token
-        
+
     if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
         f = NamedTemporaryFile("w+t", delete=False)
         try:

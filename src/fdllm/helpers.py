@@ -7,7 +7,9 @@ from .llmtypes import (
     AzureOpenAIModelType,
     AzureMistralAIModelType,
     VertexAIModelType,
-    OpenRouterModelType
+    OpenRouterModelType,
+    GroqModelType,
+    FireworksModelType
 )
 from .openai import GPTCaller
 from .anthropic import ClaudeCaller
@@ -19,7 +21,7 @@ def get_caller(model: str) -> LLMCaller:
         return GPTCaller(model)
     elif modeltype in [VertexAIModelType]:
         return GPTCaller(model)
-    elif modeltype in [OpenRouterModelType]:
+    elif modeltype in [OpenRouterModelType, GroqModelType, FireworksModelType]:
         return GPTCaller(model)
     elif modeltype in [AnthropicModelType]:
         return ClaudeCaller(model)
