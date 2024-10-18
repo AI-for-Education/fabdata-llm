@@ -21,7 +21,7 @@ dependencies = [
     "aiofiles == 23.1.*",
     "pillow",
     "numpy",
-    "mistralai == 0.1.*",
+    "mistralai >= 0.1.0,<0.3",
     "pyyaml",
     "google-auth == 2.32.*"
 ]
