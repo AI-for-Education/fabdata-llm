@@ -75,6 +75,10 @@ class LLMModelType(BaseModel):
     @classmethod
     def get_type(cls, name) -> LLMModelType:
         models = load_models()
+        if name not in models:
+            raise NotImplementedError(
+                f"{name} is not a recognised model name, check models.yaml"
+            )
         MODEL_TYPES = cls.model_types()
         if models[name]["Api_Interface"] not in MODEL_TYPES:
             raise ValueError(
