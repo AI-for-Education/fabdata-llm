@@ -2,7 +2,7 @@ import pytest
 from types import SimpleNamespace
 from pathlib import Path
 
-from fdllm import GPTCaller
+from fdllm import OpenAICaller
 from fdllm.llmtypes import LLMMessage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.sysutils import register_models
@@ -26,11 +26,11 @@ register_models(Path.home() / ".fdllm/custom_models.yaml")
 
 @pytest.mark.parametrize("model", TEST_MODELS)
 def test_init_openai(model):
-    GPTCaller(model=model)
+    OpenAICaller(model=model)
 
 @pytest.mark.parametrize("model", TEST_VISION_MODELS)
 def test_init_openaivision(model):
-    GPTCaller(model=model)
+    OpenAICaller(model=model)
 
 @pytest.mark.parametrize(
     "role, expected",
@@ -40,25 +40,25 @@ def test_init_openaivision(model):
     ],
 )
 def test_format_message_openai(role, expected):
-    caller = GPTCaller()
+    caller = OpenAICaller()
     assert caller.format_message(TEST_MESSAGE[role]) == expected
 
 
 def test_format_messagelist_openai():
-    caller = GPTCaller()
+    caller = OpenAICaller()
     out = caller.format_messagelist(TEST_MESSAGE_LIST)
     expected = [caller.format_message(message) for message in TEST_MESSAGE_LIST]
     assert out == expected
 
 
 def test_format_output_openai():
-    caller = GPTCaller()
+    caller = OpenAICaller()
     out = caller.format_output(TEST_RESULT_OPENAI)
     assert isinstance(out, LLMMessage)
 
 
 def test_tokenize_openai():
-    caller = GPTCaller()
+    caller = OpenAICaller()
     out = len(caller.tokenize(TEST_MESSAGE_LIST))
     expected = len(
         tokenize_chatgpt_messages(caller.format_messagelist(TEST_MESSAGE_LIST))[0]

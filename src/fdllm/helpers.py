@@ -1,5 +1,5 @@
 from .llmtypes import LLMCaller
-from .openai import GPTCaller, OpenAICaller
+from .openai import OpenAICaller
 from .anthropic import ClaudeCaller
 from .mistralai import MistralCaller
 from .sysutils import load_models

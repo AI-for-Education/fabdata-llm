@@ -1,1 +1,1 @@
-from .caller import GPTCaller, OpenAICaller
+from .caller import OpenAICaller

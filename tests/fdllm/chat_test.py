@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import PrivateAttr
 
 from fdllm.chat import ChatController, ChatPlugin
-from fdllm import GPTCaller, ClaudeCaller
+from fdllm import OpenAICaller, ClaudeCaller
 from fdllm.llmtypes import LLMMessage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.sysutils import register_models
@@ -75,7 +75,7 @@ TEST_SYSMSG_FORMAT = {
         TEST_SYSTEM_MESSAGE,
     ],
 }
-TEST_CALLERS = [GPTCaller, ClaudeCaller]
+TEST_CALLERS = [OpenAICaller, ClaudeCaller]
 
 
 @pytest.mark.parametrize(
