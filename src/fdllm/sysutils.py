@@ -2,12 +2,39 @@ from typing import Union
 import os
 from pathlib import Path
 import yaml
-from copy import deepcopy
+from copy import deepcopy, copy
 from functools import reduce
 
 HERE = Path(__file__).parent
 basemodelfile = HERE / "models.yaml"
-MODELS = {}
+
+
+def deepmerge_dicts(dict1, dict2, copy_out=True):
+    """Merge two dicts:
+
+    - dict values are merged heirarchically
+    - model2 keys overwrite model1 keys
+    - does not change either of the two inputs, returns a deepcopy
+
+    """
+    if dict1 is None:
+        return deepcopy(dict2)
+    if copy_out:
+        out = deepcopy(dict1)
+    else:
+        out = dict1
+
+    for key2, val2 in dict2.items():
+        if key2 in dict1:
+            # use the copy so we don't have to deepcopy in the recursive call
+            val1 = out[key2]
+            if isinstance(val1, dict) and isinstance(val2, dict):
+                out[key2] = deepmerge_dicts(val1, val2, copy_out=False)
+            else:
+                out[key2] = val2
+        else:
+            out[key2] = val2
+    return out
 
 
 def _parse_model_config_file(file: Union[str, os.PathLike]):
@@ -36,6 +63,7 @@ def _parse_model_config_file(file: Union[str, os.PathLike]):
 
 
 BASEMODELS = _parse_model_config_file(basemodelfile)
+MODELS = copy(BASEMODELS)
 
 
 def list_models(full_info=False, base_only=False):
@@ -63,31 +91,3 @@ def load_models(base_only=False):
         return BASEMODELS
     else:
         return MODELS
-
-
-def deepmerge_dicts(dict1, dict2, copy_out=True):
-    """Merge two dicts:
-
-    - dict values are merged heirarchically
-    - model2 keys overwrite model1 keys
-    - does not change either of the two inputs, returns a deepcopy
-
-    """
-    if dict1 is None:
-        return deepcopy(dict2)
-    if copy_out:
-        out = deepcopy(dict1)
-    else:
-        out = dict1
-
-    for key2, val2 in dict2.items(dict2):
-        if key2 in dict1:
-            # use the copy so we don't have to deepcopy in the recursive call
-            val1 = out[key2]
-            if isinstance(val1, dict) and isinstance(val2, dict):
-                out[key2] = deepmerge_dicts(val1, val2, copy_out=False)
-            else:
-                out[key2] = val2
-        else:
-            out[key2] = val2
-    return out

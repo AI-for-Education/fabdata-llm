@@ -17,9 +17,6 @@ from ..llmtypes import (
     OpenAIModelType,
     VertexAIModelType,
     AzureOpenAIModelType,
-    OpenRouterModelType,
-    GroqModelType,
-    FireworksModelType,
     LLMModelType,
     LLMMessage,
     LLMToolCall,
@@ -35,9 +32,6 @@ class GPTCaller(LLMCaller):
             OpenAIModelType,
             AzureOpenAIModelType,
             VertexAIModelType,
-            OpenRouterModelType,
-            GroqModelType,
-            FireworksModelType,
         ]:
             raise ValueError(f"{model} is not supported")
 
@@ -55,53 +49,12 @@ class GPTCaller(LLMCaller):
                 model_.Client_Args["api_key"] = _get_google_token()
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
-        elif Modtype in [OpenRouterModelType]:
-            if model_.Name[:3] != "or-":
-                raise ValueError(
-                    f"{model._Name} must begin with or- for OpenRouter models"
-                )
-            if "api_key" not in model_.Client_Args:
-                raise ValueError(
-                    "api_key must be defined in yaml config for OpenRouter models"
-                )
-            model_.Name = model_.Model_Prefix + "/" + model_.Name[3:]
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
-        elif Modtype in [GroqModelType]:
-            if model_.Name[:5] != "groq-":
-                raise ValueError(f"{model._Name} must begin with groq- for Groq models")
-            if "api_key" not in model_.Client_Args:
-                raise ValueError(
-                    "api_key must be defined in yaml config for Groq models"
-                )
-            model_.Name = model_.Name[5:]
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
-        elif Modtype in [FireworksModelType]:
-            if model_.Name[:3] != "fw-":
-                raise ValueError(
-                    f"{model._Name} must begin with fw- for Firework models"
-                )
-            if "api_key" not in model_.Client_Args:
-                raise ValueError(
-                    "api_key must be defined in yaml config for Firework models"
-                )
-            model_.Name = model_.Model_Prefix + "/" + model_.Name[3:]
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
 
-        if Modtype in [FireworksModelType, GroqModelType]:
-            call_args = LLMCallArgs(
-                Model="model",
-                Messages="messages",
-                Max_Tokens="max_tokens",
-            )
-        else:
-            call_args = LLMCallArgs(
-                Model="model",
-                Messages="messages",
-                Max_Tokens="max_completion_tokens",
-            )
+        call_args = LLMCallArgs(
+            Model="model",
+            Messages="messages",
+            Max_Tokens="max_completion_tokens",
+        )
 
         super().__init__(
             Model=model_,
@@ -197,79 +150,33 @@ class GPTCaller(LLMCaller):
 class OpenAICaller(LLMCaller):
     def __init__(self, model: str = "gpt-3.5-turbo"):
         Modtype = LLMModelType.get_type(model)
-        if isinstance(Modtype, tuple):
-            raise ValueError(f"{model} is ambiguous type")
-        if Modtype not in [
-            OpenAIModelType,
-            AzureOpenAIModelType,
-            VertexAIModelType,
-            OpenRouterModelType,
-            GroqModelType,
-            FireworksModelType,
-        ]:
-            raise ValueError(f"{model} is not supported")
-
         model_: LLMModelType = Modtype(Name=model)
 
-        if Modtype in [OpenAIModelType]:
+        if Modtype in [VertexAIModelType]:
+            if "api_key" not in model_.Client_Args:
+                model_.Client_Args["api_key"] = _get_google_token()
+
+        if model_.Client_Args.get("api_key", None) is None:
+            if (model_.Api_Key_Env_Var is None) or (
+                model_.Api_Key_Env_Var not in os.environ
+            ):
+                raise ValueError(
+                    f"{model_.Name} does not have api_key or Api_Key_Env_Var set"
+                )
+            model_.Client_Args["api_key"] = os.environ[model_.Api_Key_Env_Var]
+
+        if Modtype in [OpenAIModelType, VertexAIModelType]:
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
         elif Modtype in [AzureOpenAIModelType]:
             client = AzureOpenAI(azure_deployment=model, **model_.Client_Args)
             aclient = AsyncAzureOpenAI(azure_deployment=model, **model_.Client_Args)
-        elif Modtype in [VertexAIModelType]:
-            model_.Name = f"google/{model_.Name}"
-            if "api_key" not in model_.Client_Args:
-                model_.Client_Args["api_key"] = _get_google_token()
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
-        elif Modtype in [OpenRouterModelType]:
-            if model_.Name[:3] != "or-":
-                raise ValueError(
-                    f"{model._Name} must begin with or- for OpenRouter models"
-                )
-            if "api_key" not in model_.Client_Args:
-                raise ValueError(
-                    "api_key must be defined in yaml config for OpenRouter models"
-                )
-            model_.Name = model_.Model_Prefix + "/" + model_.Name[3:]
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
-        elif Modtype in [GroqModelType]:
-            if model_.Name[:5] != "groq-":
-                raise ValueError(f"{model._Name} must begin with groq- for Groq models")
-            if "api_key" not in model_.Client_Args:
-                raise ValueError(
-                    "api_key must be defined in yaml config for Groq models"
-                )
-            model_.Name = model_.Name[5:]
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
-        elif Modtype in [FireworksModelType]:
-            if model_.Name[:3] != "fw-":
-                raise ValueError(
-                    f"{model._Name} must begin with fw- for Firework models"
-                )
-            if "api_key" not in model_.Client_Args:
-                raise ValueError(
-                    "api_key must be defined in yaml config for Firework models"
-                )
-            model_.Name = model_.Model_Prefix + "/" + model_.Name[3:]
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
 
-        if Modtype in [FireworksModelType, GroqModelType]:
-            call_args = LLMCallArgs(
-                Model="model",
-                Messages="messages",
-                Max_Tokens="max_tokens",
-            )
-        else:
-            call_args = LLMCallArgs(
-                Model="model",
-                Messages="messages",
-                Max_Tokens="max_completion_tokens",
-            )
+        call_args = LLMCallArgs(
+            Model="model",
+            Messages="messages",
+            Max_Tokens=model_.Max_Token_Arg_Name,
+        )
 
         super().__init__(
             Model=model_,
@@ -360,8 +267,8 @@ class OpenAICaller(LLMCaller):
             return [None] * (texttokens + imgtokens)
         else:
             return tokenize_chatgpt_messages(self.format_messagelist(messagelist))[0]
-        
-        
+
+
 def _gpt_common_fmt_output(output):
     if isinstance(output, GeneratorType):
         return output
@@ -410,4 +317,3 @@ def _get_google_token():
     else:
         token = get_token()
     return token
-

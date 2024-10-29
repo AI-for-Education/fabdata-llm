@@ -7,6 +7,7 @@ from dataclasses import field
 from functools import wraps
 from pathlib import Path
 from io import BytesIO
+from copy import copy
 import base64
 
 import numpy as np
@@ -23,12 +24,13 @@ from .sysutils import load_models, deepmerge_dicts
 
 
 class LLMModelType(BaseModel):
-    Name: Optional[str]
+    Name: Optional[str] # why is name optional?
     Api_Interface: str
     Api_Key_Env_Var: Optional[str] = None
+    Api_Model_Name: Optional[str] = None
+    Max_Token_Arg_Name: Optional[str] = "max_completion_tokens"
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
-    Model_Prefix: Optional[str] = ""
     Client_Args: dict = Field(default_factory=dict)
     Tool_Use: bool = False
     Vision: bool = False
@@ -37,6 +39,7 @@ class LLMModelType(BaseModel):
     
 
     def __init__(self, Name, model_type=None):
+        # do we need to allow model_type as an argument anyway? it should come from the model config?
         # if model_type is None:
         #     # do we need to allow None models? (add api)interface here)
         #     super().__init__(Name=Name, Token_Window=0, Api_Interface="")
@@ -44,10 +47,18 @@ class LLMModelType(BaseModel):
         models = load_models()
         if model_type not in self.model_types():
             raise NotImplementedError(f"{model_type} is not a valid model type")
-        if model_type and (models[Name].api_interface != model_type):
+        if model_type and (models[Name]["Api_Interface"] != model_type):
             raise ValueError(f"Mismatch type {model_type} specified for model {Name}")
-        super().__init__(Name=Name, **models[Name])
-        self.Client_Args = deepmerge_dicts(self._default_client_args, self.Client_Args)
+       
+        # initialize pydantic object with the config
+        model_config = copy(models[Name])
+        super().__init__(Name=Name, **model_config)
+
+        # if no Api_Model_Name is set we use the model name directly
+        if self.Api_Model_Name is None:
+            self.Api_Model_Name = Name
+        # apply defaults from subclass 
+        self.Client_Args = deepmerge_dicts(self._default_client_args, model_config.get("Client_Args",{}))
 
     @classmethod
     def model_types(cls) -> Dict[str, Type['LLMModelType']]:
@@ -65,12 +76,12 @@ class LLMModelType(BaseModel):
     def get_type(cls, name) -> LLMModelType:
         models = load_models()
         MODEL_TYPES = cls.model_types()
-        if models[name].api_interface not in MODEL_TYPES:
+        if models[name]["Api_Interface"] not in MODEL_TYPES:
             raise ValueError(
                 "Unknown api_interface setting, check models.yaml config file"
             )
         else:
-            return MODEL_TYPES[models[name].api_interface]
+            return MODEL_TYPES[models[name]["Api_Interface"]]
 
 
 class OpenAIModelType(LLMModelType):
@@ -277,7 +288,7 @@ class LLMCaller(ABC, BaseModel):
         if self.Token_Limit_Completion is not None:
             max_tokens = min(max_tokens, self.Token_Limit_Completion)
         if self.Args is not None:
-            kwargs[self.Args.Model] = self.Model.Name
+            kwargs[self.Args.Model] = self.Model.Api_Model_Name
             kwargs[self.Args.Max_Tokens] = max_tokens
             kwargs[self.Args.Messages] = self.format_messagelist(messages)
         return {**self.Defaults, **kwargs}

@@ -1,4 +1,5 @@
 OpenAI_Base_Models:
+  Api_Interface: OpenAI
   models:
     gpt-3.5-turbo:
       Token_Window: 4096
@@ -79,6 +80,7 @@ OpenAI_Base_Models:
       Vision: True
 
 Anthropic:
+  Api_Interface: Anthropic
   Token_Limit_Completion: 4096
   Flexible_SysMsg: False
   models:
@@ -90,6 +92,7 @@ Anthropic:
       Token_Window: 200000
 
 AnthropicVision:
+  Api_Interface: AnthropicVision
   Token_Limit_Completion: 4096
   Flexible_SysMsg: False
   Tool_Use: True
@@ -103,6 +106,7 @@ AnthropicVision:
       Token_Window: 200000
   
 VertexAI:
+  Api_Interface: VertexAI
   Token_Limit_Completion: 8192
   Flexible_SysMsg: True
   Tool_Use: True

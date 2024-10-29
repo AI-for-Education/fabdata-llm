@@ -1,16 +1,4 @@
-from .llmtypes import (
-    LLMModelType,
-    LLMCaller,
-    OpenAIModelType,
-    AnthropicModelType,
-    AnthropicVisionModelType,
-    AzureOpenAIModelType,
-    AzureMistralAIModelType,
-    VertexAIModelType,
-    OpenRouterModelType,
-    GroqModelType,
-    FireworksModelType
-)
+from .llmtypes import LLMCaller
 from .openai import GPTCaller, OpenAICaller
 from .anthropic import ClaudeCaller
 from .mistralai import MistralCaller
@@ -25,12 +13,19 @@ API_CALLERS = {
     "VertexAI": OpenAICaller,
 }
 
+
 def get_caller(model: str) -> LLMCaller:
     models = load_models()
     if model not in models:
-        raise NotImplementedError(f"{model} is not a recognised model name, check models.yaml")
+        raise NotImplementedError(
+            f"{model} is not a recognised model name, check models.yaml"
+        )
     model_params = models[model]
-    if model_params.api_interface not in API_CALLERS:
-        raise ValueError(f"{model_params.api_inferface} is not a recognised API interface")
+    if "Api_Interface" not in model_params:
+        raise ValueError(f"{model} does not have an API interface defined")
+    if model_params["Api_Interface"] not in API_CALLERS:
+        raise ValueError(
+            f"{model_params['Api_Interface']} is not a recognised API interface"
+        )
     else:
-        return API_CALLERS[model_params.api_interface](model)
+        return API_CALLERS[model_params["Api_Interface"]](model)
