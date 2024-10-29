@@ -11,30 +11,26 @@ from .llmtypes import (
     GroqModelType,
     FireworksModelType
 )
-from .openai import GPTCaller
+from .openai import GPTCaller, OpenAICaller
 from .anthropic import ClaudeCaller
 from .mistralai import MistralCaller
+from .sysutils import load_models
+
+API_CALLERS = {
+    "OpenAI": OpenAICaller,
+    "AzureOpenAI": OpenAICaller,
+    "AzureMistralAI": MistralCaller,
+    "Anthropic": ClaudeCaller,
+    "AnthropicVision": ClaudeCaller,
+    "VertexAI": OpenAICaller,
+}
 
 def get_caller(model: str) -> LLMCaller:
-    modeltype = LLMModelType.get_type(model)
-    if modeltype in [OpenAIModelType, AzureOpenAIModelType]:
-        return GPTCaller(model)
-    elif modeltype in [VertexAIModelType]:
-        return GPTCaller(model)
-    elif modeltype in [OpenRouterModelType, GroqModelType, FireworksModelType]:
-        return GPTCaller(model)
-    elif modeltype in [AnthropicModelType]:
-        return ClaudeCaller(model)
-    elif modeltype in [AnthropicVisionModelType]:
-        return ClaudeCaller(model)
-    elif modeltype in [AnthropicVisionModelType]:
-        return ClaudeCaller(model)
-    elif modeltype in [AzureMistralAIModelType]:
-        return MistralCaller(model)
-    elif isinstance(modeltype, tuple):
-        raise NotImplementedError(
-            f"{model} is not a unique name in model config."
-            " Currently all model names must be unique."
-        )
+    models = load_models()
+    if model not in models:
+        raise NotImplementedError(f"{model} is not a recognised model name, check models.yaml")
+    model_params = models[model]
+    if model_params.api_interface not in API_CALLERS:
+        raise ValueError(f"{model_params.api_inferface} is not a recognised API interface")
     else:
-        raise NotImplementedError(f"{model} is not a valid model name")
+        return API_CALLERS[model_params.api_interface](model)

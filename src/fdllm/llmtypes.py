@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Literal, Callable, Awaitable, Any, Optional, Dict, Union
+from typing import List, Literal, Callable, Awaitable, Any, Optional, Dict, Union, Type
 import datetime
 from abc import ABC, abstractmethod
 import os
@@ -19,11 +19,13 @@ from PIL import Image, ImageFile
 from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
-from .sysutils import load_models
+from .sysutils import load_models, deepmerge_dicts
 
 
 class LLMModelType(BaseModel):
     Name: Optional[str]
+    Api_Interface: str
+    Api_Key_Env_Var: Optional[str] = None
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Model_Prefix: Optional[str] = ""
@@ -31,89 +33,85 @@ class LLMModelType(BaseModel):
     Tool_Use: bool = False
     Vision: bool = False
     Flexible_SysMsg: bool = True
+    _default_client_args = {}
+    
 
     def __init__(self, Name, model_type=None):
-        if model_type is None:
-            super().__init__(Name=Name, Token_Window=0)
-            return
-        basemodels = load_models()
-        if model_type not in basemodels:
+        # if model_type is None:
+        #     # do we need to allow None models? (add api)interface here)
+        #     super().__init__(Name=Name, Token_Window=0, Api_Interface="")
+        #     return
+        models = load_models()
+        if model_type not in self.model_types():
             raise NotImplementedError(f"{model_type} is not a valid model type")
-        typemodels = basemodels[model_type]
-        if Name not in typemodels:
-            raise NotImplementedError(f"{Name} is not a valid {model_type} model")
-        super().__init__(Name=Name, **typemodels[Name])
+        if model_type and (models[Name].api_interface != model_type):
+            raise ValueError(f"Mismatch type {model_type} specified for model {Name}")
+        super().__init__(Name=Name, **models[Name])
+        self.Client_Args = deepmerge_dicts(self._default_client_args, self.Client_Args)
 
     @classmethod
-    def get_type(cls, name) -> Union[tuple[LLMModelType], LLMModelType, None]:
-        basemodels = load_models()
-        usetype = []
-        for model_type, models in basemodels.items():
-            if name in models:
-                usetype.append(model_type)
-        modtypelist = []
-        for modtype in usetype:
-            if modtype == "OpenAI":
-                modtypelist.append(OpenAIModelType)
-            elif modtype == "AzureOpenAI":
-                modtypelist.append(AzureOpenAIModelType)
-            elif modtype == "AzureMistralAI":
-                modtypelist.append(AzureMistralAIModelType)
-            elif modtype == "Anthropic":
-                modtypelist.append(AnthropicModelType)
-            elif modtype == "AnthropicVision":
-                modtypelist.append(AnthropicVisionModelType)
-            elif modtype == "AzureOpenAI":
-                modtypelist.append(AzureOpenAIModelType)
-            elif modtype == "VertexAI":
-                modtypelist.append(VertexAIModelType)
-            elif modtype == "OpenRouter":
-                modtypelist.append(OpenRouterModelType)
-            elif modtype == "Groq":
-                modtypelist.append(GroqModelType)
-            elif modtype == "Fireworks":
-                modtypelist.append(FireworksModelType)
-        if len(modtypelist) > 1:
-            return tuple(modtypelist)
-        elif len(modtypelist) == 1:
-            return modtypelist[0]
-        
+    def model_types(cls) -> Dict[str, Type['LLMModelType']]:
+        return {
+            "OpenAI": OpenAIModelType,
+            "AzureOpenAI": AzureOpenAIModelType,
+            "AzureMistralAI": AzureMistralAIModelType,
+            "AzureOpenAI": AzureOpenAIModelType,
+            "Anthropic": AnthropicModelType,
+            "AnthropicVision": AnthropicVisionModelType,
+            "VertexAI": VertexAIModelType,
+        }
+
+    @classmethod
+    def get_type(cls, name) -> LLMModelType:
+        models = load_models()
+        MODEL_TYPES = cls.model_types()
+        if models[name].api_interface not in MODEL_TYPES:
+            raise ValueError(
+                "Unknown api_interface setting, check models.yaml config file"
+            )
+        else:
+            return MODEL_TYPES[models[name].api_interface]
+
 
 class OpenAIModelType(LLMModelType):
+    Api_Key_Env_Var: str = "OPENAI_API_KEY"
+
     def __init__(self, Name):
         super().__init__(Name, "OpenAI")
 
+
 class AzureOpenAIModelType(LLMModelType):
+    Api_Key_Env_Var: str = "AZURE_OPENAI_API_KEY"
+
     def __init__(self, Name):
         super().__init__(Name, "AzureOpenAI")
 
+
 class AzureMistralAIModelType(LLMModelType):
+    Api_Key_Env_Var: str = "MISTRAL_API_KEY"
+
     def __init__(self, Name):
         super().__init__(Name, "AzureMistralAI")
 
+
 class AnthropicModelType(LLMModelType):
+    Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
+
     def __init__(self, Name):
         super().__init__(Name, "Anthropic")
 
+
 class AnthropicVisionModelType(LLMModelType):
+    Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
+
     def __init__(self, Name):
         super().__init__(Name, "AnthropicVision")
+
 
 class VertexAIModelType(LLMModelType):
     def __init__(self, Name):
         super().__init__(Name, "VertexAI")
 
-class OpenRouterModelType(LLMModelType):
-    def __init__(self, Name):
-        super().__init__(Name, "OpenRouter")
-
-class GroqModelType(LLMModelType):
-    def __init__(self, Name):
-        super().__init__(Name, "Groq")
-
-class FireworksModelType(LLMModelType):
-    def __init__(self, Name):
-        super().__init__(Name, "Fireworks")
 
 class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "tool", "error"]
@@ -135,9 +133,7 @@ class LLMMessage(BaseModel):
         else:
             return super().__eq__(__value)
 
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+    model_config = {"arbitrary_types_allowed": True}
 
 
 class LLMToolCall(BaseModel):
@@ -169,7 +165,7 @@ class LLMImage(BaseModel):
         if self.Img is None:
             return
         bts = BytesIO()
-        self.Img.convert('RGB').save(bts, format="png") 
+        self.Img.convert("RGB").save(bts, format="png")
 
         bts.seek(0)
         return base64.b64encode(bts.read()).decode("utf-8")
@@ -210,9 +206,7 @@ class LLMImage(BaseModel):
             im = im.resize((finalwidth, finalheight), Image.BILINEAR)
         self.Img = im
 
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+    model_config = {"arbitrary_types_allowed": True}
 
 
 @dataclass(config=ConfigDict(validate_assignment=True))
