@@ -63,7 +63,6 @@ class LLMModelType(BaseModel):
             "OpenAI": OpenAIModelType,
             "AzureOpenAI": AzureOpenAIModelType,
             "AzureMistralAI": AzureMistralAIModelType,
-            "AzureOpenAI": AzureOpenAIModelType,
             "Anthropic": AnthropicModelType,
             "VertexAI": VertexAIModelType,
         }
