@@ -24,7 +24,7 @@ from .sysutils import load_models, deepmerge_dicts
 
 
 class LLMModelType(BaseModel):
-    Name: Optional[str] # why is name optional?
+    Name: Optional[str]  # why is name optional?
     Api_Interface: str
     Api_Key_Env_Var: Optional[str] = None
     Api_Model_Name: Optional[str] = None
@@ -36,20 +36,14 @@ class LLMModelType(BaseModel):
     Vision: bool = False
     Flexible_SysMsg: bool = True
     _default_client_args = {}
-    
 
-    def __init__(self, Name, model_type=None):
-        # do we need to allow model_type as an argument anyway? it should come from the model config?
-        # if model_type is None:
-        #     # do we need to allow None models? (add api)interface here)
-        #     super().__init__(Name=Name, Token_Window=0, Api_Interface="")
-        #     return
+    def __init__(self, Name):
         models = load_models()
-        if model_type not in self.model_types():
-            raise NotImplementedError(f"{model_type} is not a valid model type")
-        if model_type and (models[Name]["Api_Interface"] != model_type):
-            raise ValueError(f"Mismatch type {model_type} specified for model {Name}")
-       
+        if Name not in models:
+            raise NotImplementedError(
+                f"{Name} is not a recognised model name, check models.yaml"
+            )
+
         # initialize pydantic object with the config
         model_config = copy(models[Name])
         super().__init__(Name=Name, **model_config)
@@ -57,11 +51,13 @@ class LLMModelType(BaseModel):
         # if no Api_Model_Name is set we use the model name directly
         if self.Api_Model_Name is None:
             self.Api_Model_Name = Name
-        # apply defaults from subclass 
-        self.Client_Args = deepmerge_dicts(self._default_client_args, model_config.get("Client_Args",{}))
+        # apply defaults from subclass
+        self.Client_Args = deepmerge_dicts(
+            self._default_client_args, model_config.get("Client_Args", {})
+        )
 
     @classmethod
-    def model_types(cls) -> Dict[str, Type['LLMModelType']]:
+    def model_types(cls) -> Dict[str, Type["LLMModelType"]]:
         return {
             "OpenAI": OpenAIModelType,
             "AzureOpenAI": AzureOpenAIModelType,
@@ -91,41 +87,25 @@ class LLMModelType(BaseModel):
 class OpenAIModelType(LLMModelType):
     Api_Key_Env_Var: str = "OPENAI_API_KEY"
 
-    def __init__(self, Name):
-        super().__init__(Name, "OpenAI")
-
 
 class AzureOpenAIModelType(LLMModelType):
     Api_Key_Env_Var: str = "AZURE_OPENAI_API_KEY"
-
-    def __init__(self, Name):
-        super().__init__(Name, "AzureOpenAI")
 
 
 class AzureMistralAIModelType(LLMModelType):
     Api_Key_Env_Var: str = "MISTRAL_API_KEY"
 
-    def __init__(self, Name):
-        super().__init__(Name, "AzureMistralAI")
-
 
 class AnthropicModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
-
-    def __init__(self, Name):
-        super().__init__(Name, "Anthropic")
 
 
 class AnthropicVisionModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
 
-    def __init__(self, Name):
-        super().__init__(Name, "AnthropicVision")
-
 
 class VertexAIModelType(LLMModelType):
-    def __init__(self, Name):
-        super().__init__(Name, "VertexAI")
+    pass
 
 
 class LLMMessage(BaseModel):
