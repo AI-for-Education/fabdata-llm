@@ -1,9 +1,15 @@
-OpenAI:
-  model-name:
-    Token_Window: # required
-    Token_Limit_Completion:
-    Flexible_Sys_Msg:
+models:
+  openai-model-name:
+    Api_Interface: OpenAI # required
+    Token_Window: # required, size of context window
+    Api_Model_Name: # if different from model-name (ie including a path)
+    Max_Token_Arg_Name: # defaults to "max_completion_tokens"
+    # some openai-compatible API endpoints require "max_tokens" instead 
+    Api_Key_Env_Var: # name of environment variable holding api key
+    Token_Limit_Completion: # maximum size of generated text
+    Flexible_Sys_Msg: 
     Tool_Use:
+    Vision: 
     Client_Args:
       api_key:
       organization:
@@ -14,12 +20,15 @@ OpenAI:
       default_query:
       http_client:
 
-AzureOpenAI:
-  model-name:
+  azure-model-name:
+    Api_Interface: AzureOpenAI # required
     Token_Window: # required
+    Api_Model_Name:
+    Api_Key_Env_Var:
     Token_Limit_Completion:
     Flexible_Sys_Msg:
     Tool_Use:
+    Vision:
     Client_Args:
       azure_deployment:
       api_version:
@@ -33,24 +42,30 @@ AzureOpenAI:
       default_query:
       http_client:
 
-AzureMistralAI:
-  model-name:
+  azure-mistal-model-name:
+    Api_Interface: AzureMistralAI # required
     Token_Window: # required
+    Api_Model_Name:
+    Api_Key_Env_Var:
     Token_Limit_Completion:
     Flexible_Sys_Msg:
     Tool_Use:
+    Vision:
     Client_Args:
       api_key:
       endpoint:
       max_retries:
       timeout:
 
-Anthropic:
-  model-name:
+  anthropic-model-name:
+    Api_Interface: Anthropic # required
     Token_Window: # required
+    Api_Model_Name:
+    Api_Key_Env_Var:
     Token_Limit_Completion:
-    Flexible_Sys_Msg:
+    Flexible_Sys_Msg: # false for Anthropic models 
     Tool_Use:
+    Vision:
     Client_Args:
       api_key:
       auth_token:
@@ -63,3 +78,32 @@ Anthropic:
       transport:
       proxies:
       connection_pool_limits:
+
+  vertex-model-name:
+    Api_Interface: VertexAI # required
+    Token_Window: # required
+    Api_Model_Name:
+    Token_Limit_Completion:
+    Flexible_Sys_Msg:
+    Tool_Use:
+    Vision:
+    Client_Args:
+      api_key:
+      endpoint:
+      max_retries:
+      timeout:
+
+# models can also be defined in groups, each model in the group inherits parameters
+# from the group (which are overridden by per-model settings)
+OpenAICompatibleProvider:
+  Api_Interface: OpenAI
+  Token_Window: # required
+  Max_Tokens_Arg_Name: 
+  Api_Key_Env_Var: 
+  Client_Args:
+    base_url: 
+  models:
+    provider-model-one:
+      Api_Model_Name: 
+    provider-model-two:
+      Api_Model_Name: 
