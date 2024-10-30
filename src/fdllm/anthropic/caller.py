@@ -5,7 +5,7 @@ import json
 
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
-from anthropic.types.beta.tools.tool_use_block import ToolUseBlock
+from anthropic.types import ToolUseBlock
 from anthropic._tokenizers import sync_get_tokenizer as get_tokenizer
 
 from ..llmtypes import (
@@ -30,8 +30,8 @@ class ClaudeCaller(LLMCaller):
 
         super().__init__(
             Model=model_,
-            Func=client.beta.tools.messages.create,
-            AFunc=aclient.beta.tools.messages.create,
+            Func=client.messages.create,
+            AFunc=aclient.messages.create,
             Args=LLMCallArgs(
                 Model="model", Messages="messages", Max_Tokens="max_tokens"
             ),

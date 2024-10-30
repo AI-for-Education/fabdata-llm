@@ -12,9 +12,9 @@ requires-python = ">=3.10, <3.13"
 dependencies = [
     "pydantic == 2.*",
     "python-dotenv == 1.*",
-    "openai == 1.45.*",
-    "anthropic == 0.26.*",
-    "tiktoken == 0.7.*",
+    "openai == 1.52.*",
+    "anthropic == 0.37.*",
+    "tiktoken == 0.8.*",
     "pytest",
     "pytest-cov",
     "pytest-dotenv",

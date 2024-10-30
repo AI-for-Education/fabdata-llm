@@ -205,7 +205,7 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
         ``````
     
 - You want to use the latest models, such as ```gpt-4-turbo-2024-04-09``` and ```gpt-4o``` from OpenAI, ```claude-3-opus-20240229``` from Anthropic, and `Mistral-large` (hosted on Azure AI)
-    - FabData-LLM supports the latest versions of OpenAI's and Anthropics's APIs (1.30.1 and 0.26.0 respectively at the time of writing) and the latest models, including multi-modal models
+    - FabData-LLM supports the latest versions of OpenAI's and Anthropics's APIs (1.52 and 0.37.0 respectively at the time of writing) and the latest models, including multi-modal models
     - FabData-LLM supports Mistral AI models hosted on Azure AI endpoints
 - You want all of this functionality in both sync and async applications
     - All LLMCaller objects have two call methods: ```call``` and ```acall```
