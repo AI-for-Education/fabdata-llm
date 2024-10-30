@@ -1,4 +1,4 @@
-OpenAI_Base_Models:
+OpenAI:
   Api_Interface: OpenAI
   models:
     gpt-3.5-turbo:
@@ -59,7 +59,17 @@ OpenAI_Base_Models:
       Token_Limit_Completion: 32768
       Tool_Use: False
       Vision: False
+    o1-preview:
+      Token_Window: 128000
+      Token_Limit_Completion: 32768
+      Tool_Use: False
+      Vision: False
     o1-mini-2024-09-12:
+      Token_Window: 128000
+      Token_Limit_Completion: 65536
+      Tool_Use: False
+      Vision: False
+    o1-mini:
       Token_Window: 128000
       Token_Limit_Completion: 65536
       Tool_Use: False
@@ -71,7 +81,7 @@ OpenAI_Base_Models:
       Vision: True
     gpt-4o:
       Token_Window: 128000
-      Token_Limit_Completion: 4096
+      Token_Limit_Completion: 16384
       Tool_Use: True
       Vision: True
     gpt-4-vision-preview:
@@ -81,28 +91,38 @@ OpenAI_Base_Models:
 
 Anthropic:
   Api_Interface: Anthropic
-  Token_Limit_Completion: 4096
   Flexible_SysMsg: False
-  models:
-    claude-instant-1.2:
-      Token_Window: 100000
-    claude-2.0:
-      Token_Window: 100000
-    claude-2.1:
-      Token_Window: 200000
-
-AnthropicVision:
-  Api_Interface: AnthropicVision
-  Token_Limit_Completion: 4096
-  Flexible_SysMsg: False
+  Token_Window: 200000
   Tool_Use: True
   Vision: True
   models:
+    claude-3-5-sonnet-latest:
+      Token_Limit_Completion: 8192
+    claude-3-5-sonnet-20241022:
+      Token_Limit_Completion: 8192
+    claude-3-5-sonnet-20240620:
+      Token_Limit_Completion: 8192
+    claude-3-opus-latest:
+      Token_Limit_Completion: 4096
     claude-3-opus-20240229:
-      Token_Window: 200000
+      Token_Limit_Completion: 4096
+    claude-3-sonnet-latest:
+      Token_Limit_Completion: 4096
     claude-3-sonnet-20240229:
-      Token_Window: 200000
+      Token_Limit_Completion: 4096
+    claude-3-haiku-latest:
+      Token_Limit_Completion: 4096
     claude-3-haiku-20240307:
+      Token_Limit_Completion: 4096
+
+AnthropicLegacy:
+  Api_Interface: Anthropic
+  Flexible_SysMsg: False
+  Token_Limit_Completion: 4096
+  models:
+    claude-2.0:
+      Token_Window: 100000
+    claude-2.1:
       Token_Window: 200000
   
 VertexAI:

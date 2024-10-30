@@ -1,7 +1,7 @@
-from .llmtypes import LLMCaller
-from .openai import OpenAICaller
 from .anthropic import ClaudeCaller
+from .llmtypes import LLMCaller
 from .mistralai import MistralCaller
+from .openai import OpenAICaller
 from .sysutils import load_models
 
 API_CALLERS = {
@@ -29,3 +29,4 @@ def get_caller(model: str) -> LLMCaller:
         )
     else:
         return API_CALLERS[model_params["Api_Interface"]](model)
+

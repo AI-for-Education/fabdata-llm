@@ -12,7 +12,6 @@ from ..llmtypes import (
     LLMCaller,
     LLMCallArgs,
     AnthropicModelType,
-    AnthropicVisionModelType,
     LLMModelType,
     LLMMessage,
     LLMToolCall,
@@ -20,20 +19,14 @@ from ..llmtypes import (
 
 
 class ClaudeCaller(LLMCaller):
-    def __init__(self, model: str = "claude-2.1"):
+    def __init__(self, model: str = "claude-3-5-sonnet-latest"):
         Modtype = LLMModelType.get_type(model)
-        if isinstance(Modtype, tuple):
-            raise ValueError(f"{model} is ambiguous type")
-        if Modtype not in [AnthropicModelType, AnthropicVisionModelType]:
+        if Modtype not in [AnthropicModelType]:
             raise ValueError(f"{model} is not supported")
-
+        
         model_: LLMModelType = Modtype(Name=model)
-        if model_.Client_Args.get("api_key") is None:
-            model_.Client_Args["api_key"] = os.environ.get("ANTHROPIC_KEY")
-
-        if Modtype in [AnthropicModelType, AnthropicVisionModelType]:
-            client = Anthropic(**model_.Client_Args)
-            aclient = AsyncAnthropic(**model_.Client_Args)
+        client = Anthropic(**model_.Client_Args)
+        aclient = AsyncAnthropic(**model_.Client_Args)
 
         super().__init__(
             Model=model_,

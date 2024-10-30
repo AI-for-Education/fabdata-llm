@@ -26,8 +26,6 @@ tokenizer = tokenize_chatgpt_messages
 class MistralCaller(LLMCaller):
     def __init__(self, model):
         Modtype = LLMModelType.get_type(model)
-        if isinstance(Modtype, tuple):
-            raise ValueError(f"{model} is ambiguous type")
         if Modtype not in [AzureMistralAIModelType]:
             raise ValueError(f"{model} is not supported")
 

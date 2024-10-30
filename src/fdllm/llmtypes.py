@@ -20,7 +20,7 @@ from PIL import Image, ImageFile
 from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
-from .sysutils import load_models, deepmerge_dicts
+from .sysutils import load_models, deepmerge_dicts, get_google_token
 
 
 class LLMModelType(BaseModel):
@@ -28,7 +28,7 @@ class LLMModelType(BaseModel):
     Api_Interface: str
     Api_Key_Env_Var: Optional[str] = None
     Api_Model_Name: Optional[str] = None
-    Max_Token_Arg_Name: Optional[str] = "max_completion_tokens"
+    Max_Token_Arg_Name: str = "max_completion_tokens"
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Client_Args: dict = Field(default_factory=dict)
@@ -55,6 +55,7 @@ class LLMModelType(BaseModel):
         self.Client_Args = deepmerge_dicts(
             self._default_client_args, model_config.get("Client_Args", {})
         )
+        self._set_api_key_from_env()
 
     @classmethod
     def model_types(cls) -> Dict[str, Type["LLMModelType"]]:
@@ -64,7 +65,6 @@ class LLMModelType(BaseModel):
             "AzureMistralAI": AzureMistralAIModelType,
             "AzureOpenAI": AzureOpenAIModelType,
             "Anthropic": AnthropicModelType,
-            "AnthropicVision": AnthropicVisionModelType,
             "VertexAI": VertexAIModelType,
         }
 
@@ -83,6 +83,16 @@ class LLMModelType(BaseModel):
         else:
             return MODEL_TYPES[models[name]["Api_Interface"]]
 
+    def _set_api_key_from_env(self):
+        if self.Client_Args.get("api_key", None) is None:
+            if (self.Api_Key_Env_Var is None) or (
+                self.Api_Key_Env_Var not in os.environ
+            ):
+                raise ValueError(
+                    f"{self.Name} does not have api_key or Api_Key_Env_Var set"
+                )
+            self.Client_Args["api_key"] = os.environ[self.Api_Key_Env_Var]
+
 
 class OpenAIModelType(LLMModelType):
     Api_Key_Env_Var: str = "OPENAI_API_KEY"
@@ -100,12 +110,11 @@ class AnthropicModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
 
 
-class AnthropicVisionModelType(LLMModelType):
-    Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
-
-
 class VertexAIModelType(LLMModelType):
-    pass
+
+    def _set_api_key_from_env(self):
+        if "api_key" not in self.Client_Args:
+            self.Client_Args["api_key"] = get_google_token()
 
 
 class LLMMessage(BaseModel):

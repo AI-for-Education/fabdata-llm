@@ -11,7 +11,6 @@ from .llmtypes import (
     LLMModelType,
     OpenAIModelType,
     AnthropicModelType,
-    AnthropicVisionModelType,
     AzureOpenAIModelType,
     AzureMistralAIModelType,
 )
@@ -111,7 +110,7 @@ class Tool(ABC, BaseModel):
                     },
                 },
             }
-        elif Modtype in (AnthropicModelType, AnthropicVisionModelType):
+        elif Modtype in (AnthropicModelType,):
             return {
                 "name": self.name,
                 "description": self.description,

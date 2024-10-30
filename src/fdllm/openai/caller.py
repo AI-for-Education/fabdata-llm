@@ -28,19 +28,6 @@ class OpenAICaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         model_: LLMModelType = Modtype(Name=model)
 
-        if Modtype in [VertexAIModelType]:
-            if "api_key" not in model_.Client_Args:
-                model_.Client_Args["api_key"] = _get_google_token()
-
-        if model_.Client_Args.get("api_key", None) is None:
-            if (model_.Api_Key_Env_Var is None) or (
-                model_.Api_Key_Env_Var not in os.environ
-            ):
-                raise ValueError(
-                    f"{model_.Name} does not have api_key or Api_Key_Env_Var set"
-                )
-            model_.Client_Args["api_key"] = os.environ[model_.Api_Key_Env_Var]
-
         if Modtype in [OpenAIModelType, VertexAIModelType]:
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
@@ -165,31 +152,3 @@ def _gpt_common_fmt_output(output):
         else:
             raise ValueError("Output must be either content or tool call")
 
-
-def _get_google_token():
-    def get_token():
-        creds, _ = default()
-        auth_req = requests.Request()
-        creds.refresh(auth_req)
-        return creds.token
-
-    if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
-        f = NamedTemporaryFile("w+t", delete=False)
-        try:
-            cred_json_str = os.environ.get("GOOGLE_AUTH_JSON").replace("\\n", "\n")
-            cred_json = json.loads(cred_json_str)
-            json.dump(cred_json, f)
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
-            f.close()
-            token = get_token()
-            Path(f.name).unlink()
-            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
-        except Exception as e:
-            print(e)
-            f.close()
-            Path(f.name).unlink()
-            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
-            token = None
-    else:
-        token = get_token()
-    return token

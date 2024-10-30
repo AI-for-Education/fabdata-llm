@@ -1,9 +1,13 @@
-from typing import Union
+import json
 import os
+from copy import copy, deepcopy
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import Union
+
 import yaml
-from copy import deepcopy, copy
-from functools import reduce
+from google.auth import default
+from google.auth.transport import requests
 
 HERE = Path(__file__).parent
 basemodelfile = HERE / "models.yaml"
@@ -91,3 +95,32 @@ def load_models(base_only=False):
         return BASEMODELS
     else:
         return MODELS
+
+
+def get_google_token():
+    def get_token():
+        creds, _ = default()
+        auth_req = requests.Request()
+        creds.refresh(auth_req)
+        return creds.token
+
+    if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+        f = NamedTemporaryFile("w+t", delete=False)
+        try:
+            cred_json_str = os.environ.get("GOOGLE_AUTH_JSON").replace("\\n", "\n")
+            cred_json = json.loads(cred_json_str)
+            json.dump(cred_json, f)
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
+            f.close()
+            token = get_token()
+            Path(f.name).unlink()
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
+        except Exception as e:
+            print(e)
+            f.close()
+            Path(f.name).unlink()
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS")
+            token = None
+    else:
+        token = get_token()
+    return token
