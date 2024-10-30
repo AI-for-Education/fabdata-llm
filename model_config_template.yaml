@@ -89,9 +89,14 @@ models:
     Vision:
     Client_Args:
       api_key:
-      endpoint:
-      max_retries:
+      organization:
+      base_url:
       timeout:
+      max_retries:
+      default_headers:
+      default_query:
+      http_client:
+
 
 # models can also be defined in groups, each model in the group inherits parameters
 # from the group (which are overridden by per-model settings)
