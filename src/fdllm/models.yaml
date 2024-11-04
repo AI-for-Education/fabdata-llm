@@ -102,6 +102,10 @@ Anthropic:
       Token_Limit_Completion: 8192
     claude-3-5-sonnet-20240620:
       Token_Limit_Completion: 8192
+    claude-3-5-haiku-latest:
+      Token_Limit_Completion: 8192
+    claude-3-5-haiku-20241022:
+      Token_Limit_Completion: 8192
     claude-3-opus-latest:
       Token_Limit_Completion: 4096
     claude-3-opus-20240229:
