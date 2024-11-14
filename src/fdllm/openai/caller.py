@@ -83,7 +83,6 @@ class OpenAICaller(LLMCaller):
                     f"Tried to pass images but {self.Model.Name} doesn't support images"
                 )
             content = [
-                {"type": "text", "text": message.Message},
                 *[
                     {
                         "type": "image_url",
@@ -98,6 +97,7 @@ class OpenAICaller(LLMCaller):
                     }
                     for im in message.Images
                 ],
+                {"type": "text", "text": message.Message},
             ]
             return {"role": message.Role, "content": content}
         else:
