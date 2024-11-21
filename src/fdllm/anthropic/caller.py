@@ -23,7 +23,7 @@ class ClaudeCaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         if Modtype not in [AnthropicModelType]:
             raise ValueError(f"{model} is not supported")
-        
+
         model_: LLMModelType = Modtype(Name=model)
         client = Anthropic(**model_.Client_Args)
         aclient = AsyncAnthropic(**model_.Client_Args)
@@ -66,6 +66,31 @@ class ClaudeCaller(LLMCaller):
                     }
                 )
             return out
+        elif message.Role == "user" and message.Images is not None:
+            if not self.Model.Vision:
+                raise NotImplementedError(
+                    f"Tried to pass images but {self.Model.Name} doesn't support images"
+                )
+            for im in message.Images:
+                if im.Url and (im.Img is None):
+                    raise NotImplementedError(
+                        "Anthropic API does not support images by URL"
+                    )
+            content = [
+                *[
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": im.encode(),
+                        },
+                    }
+                    for im in message.Images
+                ],
+                {"type": "text", "text": message.Message},
+            ]
+            return {"role": message.Role, "content": content}
         else:
             return {"role": message.Role, "content": message.Message}
 
