@@ -13,6 +13,7 @@ from .llmtypes import (
     AnthropicModelType,
     AzureOpenAIModelType,
     AzureMistralAIModelType,
+    VertexAIModelType,
 )
 from .chat import ChatPlugin
 
@@ -93,6 +94,7 @@ class Tool(ABC, BaseModel):
             OpenAIModelType,
             AzureOpenAIModelType,
             AzureMistralAIModelType,
+            VertexAIModelType,
         ):
             return {
                 "type": "function",

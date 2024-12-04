@@ -7,18 +7,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fabdata-llm"
-version = "0.22.3"
+version = "0.22.4"
 requires-python = ">=3.10, <3.13"
 dependencies = [
     "pydantic == 2.*",
     "python-dotenv == 1.*",
-    "openai == 1.52.*",
+    "openai >= 1.55.3, < 1.56",
     "anthropic == 0.37.*",
     "tiktoken == 0.8.*",
     "pytest",
     "pytest-cov",
     "pytest-dotenv",
-    "aiofiles == 23.1.*",
+    "aiofiles == 24.*",
     "pillow",
     "numpy",
     "mistralai >= 0.1.0,<0.3",
