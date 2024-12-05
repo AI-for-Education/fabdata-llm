@@ -80,6 +80,31 @@ class BedrockCaller(LLMCaller):
         return kwargs
 
     def format_message(self, message: LLMMessage):
+        if message.Role == "user" and message.Images is not None:
+            if not self.Model.Vision:
+                raise NotImplementedError(
+                    f"Tried to pass images but {self.Model.Name} doesn't support images"
+                )
+            for im in message.Images:
+                if im.Url and (im.Img is None):
+                    raise NotImplementedError(
+                        "Bedrock API does not support images by URL"
+                    )
+            content = [
+                {"text": message.Message},
+                *[
+                    {
+                        "image": {
+                            "format": "png",
+                            "source": {
+                                "bytes": im.get_bytes()
+                            } 
+                        },
+                    }
+                    for im in message.Images
+                ],
+            ]
+            return {"role": message.Role, "content": content}
         return {"role": message.Role, "content": [{"text": message.Message}]}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
@@ -90,6 +115,7 @@ class BedrockCaller(LLMCaller):
                 out.extend(outmsg)
             else:
                 out.append(outmsg)
+                
         return out
 
     def format_output(self, output: Any):
