@@ -185,3 +185,17 @@ Fireworks:
       Api_Model_Name: accounts/fireworks/models/mixtral-8x7b-instruct-hf
     fw-yi-large:
       Api_Model_Name: accounts/yi-01-ai/models/yi-large
+
+AmazonBedrock:
+  Api_Interface: Bedrock
+  Api_Key_Env_Var: AWS_API_KEYS
+  Client_Args:
+    region_name: us-east-1
+  Token_Window: 30000
+  Vision: True
+  models:
+    "amazon.nova-pro-v1:0": {}
+    "amazon.nova-lite-v1:0": {}
+    "amazon.nova-micro-v1:0":
+      Vision: False
+      Token_Window: 128000
