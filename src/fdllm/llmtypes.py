@@ -179,11 +179,15 @@ class LLMImage(BaseModel):
     def encode(self):
         if self.Img is None:
             return
-        bts = BytesIO()
-        self.Img.convert("RGB").save(bts, format="png")
-
-        bts.seek(0)
-        return base64.b64encode(bts.read()).decode("utf-8")
+        img_byte_arr = self.get_bytes()
+        return base64.b64encode(img_byte_arr).decode("utf-8")
+    
+    def get_bytes(self):
+        if self.Img is None:
+            return
+        img_byte_arr = BytesIO()
+        self.Img.convert("RGB").save(img_byte_arr, format="png") 
+        return img_byte_arr.getvalue()
 
     def tokenize(self):
         if self.Detail == "low":
