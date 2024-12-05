@@ -2,6 +2,7 @@ from .anthropic import ClaudeCaller
 from .llmtypes import LLMCaller
 from .mistralai import MistralCaller
 from .openai import OpenAICaller
+from .bedrock import BedrockCaller
 from .sysutils import load_models
 
 API_CALLERS = {
@@ -11,6 +12,7 @@ API_CALLERS = {
     "Anthropic": ClaudeCaller,
     "AnthropicVision": ClaudeCaller,
     "VertexAI": OpenAICaller,
+    "Bedrock": BedrockCaller
 }
 
 
