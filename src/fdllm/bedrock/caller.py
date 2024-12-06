@@ -101,9 +101,8 @@ class BedrockCaller(LLMCaller):
                                 "status": "success",
                             }
                         }
-                    ],
+                    for tc in message.ToolCalls ],
                 }
-                for tc in message.ToolCalls
             ]
         ### Handle assistant tool calls messages
         elif message.Role == "assistant" and message.ToolCalls is not None:
