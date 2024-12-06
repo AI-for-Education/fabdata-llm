@@ -20,6 +20,7 @@ from ..constants import LLM_DEFAULT_MAX_TOKENS
 
 encoding = tiktoken.get_encoding("gpt2")
 
+
 def tokenize_bedrock_messages(messages: List[Dict[str, str]]):
     mstr = "\n".join(
         "\n".join(
@@ -77,9 +78,48 @@ class BedrockCaller(LLMCaller):
             if arg in kwargs:
                 inferenceConfig[arg] = kwargs.pop(arg)
         kwargs["inferenceConfig"] = inferenceConfig
+        if "tools" in kwargs:
+            kwargs["toolConfig"] = {}
+            kwargs["toolConfig"]["tools"] = kwargs.pop("tools")
         return kwargs
 
     def format_message(self, message: LLMMessage):
+        ### Handle tool results
+        if message.Role == "tool":
+            return [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "toolResult": {
+                                "toolUseId": tc.ID,
+                                "content": [
+                                    {
+                                        "text": tc.Response,
+                                    }
+                                ],
+                                "status": "success",
+                            }
+                        }
+                    ],
+                }
+                for tc in message.ToolCalls
+            ]
+        ### Handle assistant tool calls messages
+        elif message.Role == "assistant" and message.ToolCalls is not None:
+            return {
+                "role": "assistant",
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": tc.ID,
+                            "name": tc.Name,
+                            "input": tc.Args,
+                        }
+                    }
+                    for tc in message.ToolCalls
+                ],
+            }
         if message.Role == "user" and message.Images is not None:
             if not self.Model.Vision:
                 raise NotImplementedError(
@@ -94,12 +134,7 @@ class BedrockCaller(LLMCaller):
                 {"text": message.Message},
                 *[
                     {
-                        "image": {
-                            "format": "png",
-                            "source": {
-                                "bytes": im.get_bytes()
-                            } 
-                        },
+                        "image": {"format": "png", "source": {"bytes": im.get_bytes()}},
                     }
                     for im in message.Images
                 ],
@@ -109,21 +144,61 @@ class BedrockCaller(LLMCaller):
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         out = []
+        sysmsgs = []
         for message in messagelist:
-            outmsg = self.format_message(message)
-            if isinstance(outmsg, list):
-                out.extend(outmsg)
+            if message.Role == "system":
+                sysmsgs.append({"text": message.Message})
             else:
-                out.append(outmsg)
-                
+                outmsg = self.format_message(message)
+                if isinstance(outmsg, list):
+                    out.extend(outmsg)
+                else:
+                    out.append(outmsg)
+        if sysmsgs:
+            self.Defaults["system"] = [sysmsgs[0]]
+        else:
+            self.Defaults.pop("system", None)
         return out
+
+    def format_tool(self, tool: Tool):
+        return {
+            "toolSpec": {
+                "name": self.name,
+                "description": self.description,
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": {
+                            key: val.dict() for key, val in self.params.items()
+                        },
+                        "required": [
+                            key for key, val in self.params.items() if val.required
+                        ],
+                    },
+                },
+            }
+        }
 
     def format_output(self, output: Any):
         if isinstance(output, GeneratorType):
             return output
         else:
-            msg_text = output["output"]["message"]["content"][0]["text"]
-            return LLMMessage(Role="assistant", Message=msg_text.lstrip())
+            content = output["output"]["message"]["content"]
+            if output["stopReason"] == "tool_use":
+                tool_calls = [c["toolUse"] for c in content if "toolUse" in c]
+                tcs = [
+                    LLMToolCall(
+                        ID=tc["toolUseId"],
+                        Name=tc["name"],
+                        Args=tc["input"],
+                    )
+                    for tc in tool_calls
+                ]
+                return LLMMessage(Role="assistant", ToolCalls=tcs)
+            else:
+                text = "".join([c["text"] for c in content if "text" in c]).lstrip()
+                #images = [c["image"] for c in content if "image" in c]
+                return LLMMessage(Role="assistant", Message=text)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenize_bedrock_messages(self.format_messagelist(messagelist))[0]

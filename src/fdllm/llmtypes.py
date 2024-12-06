@@ -9,6 +9,7 @@ from pathlib import Path
 from io import BytesIO
 from copy import copy
 import base64
+import json
 
 import numpy as np
 from openai import RateLimitError as RateLimitErrorOpenAI
@@ -22,6 +23,7 @@ from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 from .sysutils import load_models, deepmerge_dicts, get_google_token
 
+DEBUG = True
 
 class LLMModelType(BaseModel):
     Name: Optional[str]  # why is name optional?
@@ -318,6 +320,8 @@ class LLMCaller(ABC, BaseModel):
         include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic],
     )
     def _call(self, *args, **kwargs):
+        if DEBUG:
+            print(json.dumps(kwargs,indent=2))
         return self.Func(*args, **kwargs)
 
     @delayedretry(
