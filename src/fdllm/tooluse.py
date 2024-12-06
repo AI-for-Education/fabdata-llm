@@ -14,6 +14,7 @@ from .llmtypes import (
     AzureOpenAIModelType,
     AzureMistralAIModelType,
     VertexAIModelType,
+    BedrockModelType,
 )
 from .chat import ChatPlugin
 
@@ -123,6 +124,24 @@ class Tool(ABC, BaseModel):
                         key for key, val in self.params.items() if val.required
                     ],
                 },
+            }
+        elif Modtype in (BedrockModelType,):
+            return {
+                "toolSpec": {
+                    "name": self.name,
+                    "description": self.description,
+                    "inputSchema": {
+                        "json": {
+                            "type": "object",
+                            "properties": {
+                                key: val.dict() for key, val in self.params.items()
+                            },
+                            "required": [
+                                key for key, val in self.params.items() if val.required
+                            ],
+                        },
+                    },
+                }
             }
 
     model_config = {"arbitrary_types_allowed": True}
