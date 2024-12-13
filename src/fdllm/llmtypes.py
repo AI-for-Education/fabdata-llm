@@ -23,7 +23,7 @@ from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 from .sysutils import load_models, deepmerge_dicts, get_google_token
 
-DEBUG = True
+DEBUG = False
 
 class LLMModelType(BaseModel):
     Name: Optional[str]  # why is name optional?
