@@ -3,6 +3,7 @@ from types import GeneratorType
 import json
 
 import aioboto3
+import asyncio
 import boto3
 from botocore.exceptions import ClientError
 import tiktoken
@@ -68,6 +69,17 @@ class BedrockCaller(LLMCaller):
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
         )
+
+    def __del__(self):
+        # Clean up async caller if it has not been used.
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self.AFunc())
+            else:
+                loop.run_until_complete(self.AFunc())
+        except Exception:
+            pass
 
     def _proc_call_args(self, messages, max_tokens, **kwargs):
         # adjust args for bedrock format
