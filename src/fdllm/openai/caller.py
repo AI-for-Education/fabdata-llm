@@ -39,6 +39,7 @@ class OpenAICaller(LLMCaller):
             Model="model",
             Messages="messages",
             Max_Tokens=model_.Max_Token_Arg_Name,
+            Tool_Calls=model_.Tool_Calls_Arg_Name,
         )
 
         super().__init__(
@@ -67,7 +68,7 @@ class OpenAICaller(LLMCaller):
         elif message.Role == "assistant" and message.ToolCalls is not None:
             return {
                 "role": "assistant",
-                "tool_calls": [
+                self.Args.Tool_Calls: [
                     {
                         "id": tc.ID,
                         "type": "function",
@@ -114,7 +115,7 @@ class OpenAICaller(LLMCaller):
         return out
 
     def format_output(self, output: Any):
-        return _gpt_common_fmt_output(output)
+        return self._gpt_common_fmt_output(output)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         if self.Model.Vision:
@@ -132,23 +133,34 @@ class OpenAICaller(LLMCaller):
             return tokenize_chatgpt_messages(self.format_messagelist(messagelist))[0]
 
 
-def _gpt_common_fmt_output(output):
-    if isinstance(output, GeneratorType):
-        return output
-    else:
-        msg = output.choices[0].message
-        if msg.content is not None:
-            return LLMMessage(Role="assistant", Message=msg.content)
-        elif msg.tool_calls is not None:
-            tcs = [
-                LLMToolCall(
-                    ID=tc.id,
-                    Name=tc.function.name,
-                    Args=json.loads(tc.function.arguments),
-                )
-                for tc in msg.tool_calls
-            ]
-            return LLMMessage(Role="assistant", ToolCalls=tcs)
+    def _gpt_common_fmt_output(self, output):
+        if isinstance(output, GeneratorType):
+            return output
         else:
-            raise ValueError("Output must be either content or tool call")
-
+            msg = output.choices[0].message
+            print(msg)
+            if msg.content is not None:
+                return LLMMessage(Role="assistant", Message=msg.content)
+            elif getattr(msg,self.Args.Tool_Calls, None) is not None:
+                # Tool_Calls
+                if isinstance(getattr(msg,self.Args.Tool_Calls)[0],dict):
+                    tcs = [
+                        LLMToolCall(
+                            ID=tc['id'],
+                            Name=tc['function']['name'],
+                            Args=json.loads(tc['function']['arguments']),
+                        )
+                        for tc in getattr(msg,self.Args.Tool_Calls)
+                    ] 
+                else:
+                    tcs = [
+                        LLMToolCall(
+                            ID=tc.id,
+                            Name=tc.function.name,
+                            Args=json.loads(tc.function.arguments),
+                        )
+                        for tc in getattr(msg,self.Args.Tool_Calls)
+                    ]
+                return LLMMessage(Role="assistant", ToolCalls=tcs)
+            else:
+                raise ValueError("Output must be either content or tool call")

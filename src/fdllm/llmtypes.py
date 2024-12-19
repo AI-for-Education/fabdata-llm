@@ -29,6 +29,7 @@ class LLMModelType(BaseModel):
     Api_Key_Env_Var: Optional[str] = None
     Api_Model_Name: Optional[str] = None
     Max_Token_Arg_Name: str = "max_completion_tokens"
+    Tool_Calls_Arg_Name: str = "tool_calls"
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Client_Args: dict = Field(default_factory=dict)
@@ -217,6 +218,7 @@ class LLMCallArgs:
     Messages: str
     Model: str
     Max_Tokens: str
+    Tool_Calls: str
 
 
 class LLMCaller(ABC, BaseModel):
@@ -291,6 +293,7 @@ class LLMCaller(ABC, BaseModel):
         include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic],
     )
     def _call(self, *args, **kwargs):
+        print(kwargs)
         return self.Func(*args, **kwargs)
 
     @delayedretry(

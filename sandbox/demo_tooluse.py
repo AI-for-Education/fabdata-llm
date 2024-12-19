@@ -60,24 +60,36 @@ class TestTool3(Tool):
         return self.execute()
 
 
-# %%
-register_models(Path.home() / ".fdllm/custom_models.yaml")
+# register_models(Path.home() / ".fdllm/custom_models.yaml")
+register_models("../custom_models.yaml")
 
-# %%
-model = "gpt-4-1106-preview"
+# model = "claude-3-opus-latest"
+# model = "amazon.nova-lite-v1:0"
+# model = "amazon.nova-pro-v1:0"
+model = "gemini-2.0-flash-exp"
+# model = "gpt-4o"
 chatter = ChatController(
     Caller=get_caller(model),
     Sys_Msg={0: "Use tools for all calculations where possible."},
 )
-chatter.register_plugin(ToolUsePlugin(Tools=[TestTool1(), TestTool2(), TestTool3()]))
+# chatter.register_plugin(ToolUsePlugin(Tools=[TestTool1(), TestTool2(), TestTool3()]))
+chatter.register_plugin(ToolUsePlugin(Tools=[TestTool1()]))
 
 # %%
 ## This example is possible with a single tool call
-prompt = "pi x 5.4"
+# prompt = "5.4 x pi"
+prompt = "what is two times three"
 
+# try:
+chatter.History = []
 chatter.chat(prompt)
+    
+# except Exception as e:
+    # print(e.response)
+# not sure what is wrong here
+# ModelErrorException: An error occurred (ModelErrorException) when calling the Converse operation: 
+# The system encountered an unexpected error during processing. Try your request again.
 chatter.History
-
 # %%
 ## This example should require 3 tool calls to calculate
 ## The 2 additions could be computed in parallel tool calls,
@@ -89,6 +101,11 @@ chatter.History = []
 
 chatter.chat(prompt)
 chatter.History
+# TODO: need to put tool results into a single content block
+# ValidationException: An error occurred (ValidationException) when calling the Converse operation: 
+# Expected toolResult blocks at messages.2.content for the following Ids: 
+# tooluse_QMY-3TZZSda5zNhKO9GGAw, tooluse_DcUfrTWMRYGa3yifkHM_PQ
+
 
 # %%
 ## This example could use 3 tool calls to calculate:
@@ -97,8 +114,11 @@ chatter.History
 ## (Seems like that strategy is never used by gpt-4-1106-preview)
 prompt = "(pi * 5.4) + (6 * e)"
 
+
 # clear chat history
 chatter.History = []
 
 chatter.chat(prompt)
 chatter.History
+
+# %%
