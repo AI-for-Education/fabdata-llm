@@ -3,6 +3,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 load_dotenv('../.env')
 import os
+import logging
+logging.basicConfig(level=logging.DEBUG)
 #%%
 client = OpenAI(
     api_key=os.getenv('GEMINI_API_KEY'),
@@ -10,6 +12,24 @@ client = OpenAI(
 )
 
 call = {
+
+    "model": "models/gemini-2.0-flash-exp",
+    "max_completion_tokens": 500,
+    "messages": [
+        {"role": "system", "content": "Use tools for all calculations where possible."},
+        {"role": "user", "content": "what is two times three"},
+        {
+            "role": "assistant",
+            "toolCalls": [
+                {
+                    "function": {"arguments": "{'x': 2, 'y': 3}", "name": "mul"},
+                    "id": "0",
+                    "type": "function",
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "0", "name": "mul", "content": "6.0000"},
+    ],
     "tools": [
         {
             "type": "function",
@@ -23,23 +43,6 @@ call = {
                 },
             },
         }
-    ],
-    "model": "models/gemini-2.0-flash-exp",
-    "max_completion_tokens": 500,
-    "messages": [
-        {"role": "system", "content": "Use tools for all calculations where possible."},
-        {"role": "user", "content": "what is two times three"},
-        # {
-        #     "role": "assistant",
-        #     "toolCalls": [
-        #         {
-        #             "function": {"arguments": "{'x': 2, 'y': 3}", "name": "mul"},
-        #             "id": "0",
-        #             "type": "function",
-        #         }
-        #     ],
-        # },
-        # {"role": "tool", "tool_call_id": "0", "name": "mul", "content": "6.0000"},
     ],
 }
 # from gemini: [{'function': {'arguments': '{"x":2,"y":3}', 'name': 'mul'}, 'id': '0', 'type': 'function'}]
