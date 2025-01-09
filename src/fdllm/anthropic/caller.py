@@ -16,6 +16,7 @@ from ..llmtypes import (
     LLMMessage,
     LLMToolCall,
 )
+from ..tooluse import Tool
 
 
 class ClaudeCaller(LLMCaller):
@@ -23,7 +24,7 @@ class ClaudeCaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         if Modtype not in [AnthropicModelType]:
             raise ValueError(f"{model} is not supported")
-        
+
         model_: LLMModelType = Modtype(Name=model)
         client = Anthropic(**model_.Client_Args)
         aclient = AsyncAnthropic(**model_.Client_Args)
@@ -104,6 +105,17 @@ class ClaudeCaller(LLMCaller):
                         )
                     out.ToolCalls.append(tc)
             return out
+
+    def format_tool(self, tool: Tool):
+        return {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": {
+                "type": "object",
+                "properties": {key: val.dict() for key, val in tool.params.items()},
+                "required": [key for key, val in tool.params.items() if val.required],
+            },
+        }
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenizer(self.format_messagelist(messagelist))
