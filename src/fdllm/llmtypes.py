@@ -22,6 +22,7 @@ from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 from .sysutils import load_models, deepmerge_dicts, get_google_token
 
+
 class LLMModelType(BaseModel):
     Name: Optional[str]  # why is name optional?
     Api_Interface: str
@@ -64,6 +65,7 @@ class LLMModelType(BaseModel):
             "AzureMistralAI": AzureMistralAIModelType,
             "Anthropic": AnthropicModelType,
             "VertexAI": VertexAIModelType,
+            "GoogleGenAI": GoogeGenAIModelType,
         }
 
     @classmethod
@@ -115,6 +117,10 @@ class VertexAIModelType(LLMModelType):
             self.Client_Args["api_key"] = get_google_token()
 
 
+class GoogeGenAIModelType(LLMModelType):
+    Api_Key_Env_Var: str = "GEMINI_API_KEY"
+
+
 class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "tool", "error"]
     Message: Optional[str] = None
@@ -139,7 +145,7 @@ class LLMMessage(BaseModel):
 
 
 class LLMToolCall(BaseModel):
-    ID: str
+    ID: Optional[str]
     Name: str
     Args: dict = Field(default_factory=dict)
     Response: Optional[str] = None
@@ -166,11 +172,15 @@ class LLMImage(BaseModel):
     def encode(self):
         if self.Img is None:
             return
-        bts = BytesIO()
-        self.Img.convert("RGB").save(bts, format="png")
+        img_byte_arr = self.get_bytes()
+        return base64.b64encode(img_byte_arr).decode("utf-8")
 
-        bts.seek(0)
-        return base64.b64encode(bts.read()).decode("utf-8")
+    def get_bytes(self):
+        if self.Img is None:
+            return
+        img_byte_arr = BytesIO()
+        self.Img.convert("RGB").save(img_byte_arr, format="png")
+        return img_byte_arr.getvalue()
 
     def tokenize(self):
         if self.Detail == "low":
@@ -239,20 +249,23 @@ class LLMCaller(ABC, BaseModel):
     def format_output(self, output: Any) -> LLMMessage:
         pass
 
-    @abstractmethod
     def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
         pass
 
+    def count_tokens(self, messagelist: List[LLMMessage]) -> int:
+        return len(self.tokenize(messagelist))
+
     def format_tool(self, tool):
         pass
+
+    def format_tools(self, tools):
+        return [self.format_tool(tool) for tool in tools]
 
     def sanitize_messagelist(
         self, messagelist: List[LLMMessage], min_new_token_window: int
     ) -> List[LLMMessage]:
         out = messagelist
-        while (
-            self.Token_Window - len(self.tokenize(messagelist)) < min_new_token_window
-        ):
+        while self.Token_Window - self.count_tokens(messagelist) < min_new_token_window:
             out = out[1:]
         return out
 
@@ -278,7 +291,7 @@ class LLMCaller(ABC, BaseModel):
         if isinstance(messages, LLMMessage):
             messages = [messages]
         if max_tokens is None:
-            max_tokens = self.Token_Window - (len(self.tokenize(messages)) + 64)
+            max_tokens = self.Token_Window - (self.count_tokens(messages) + 64)
         if self.Token_Limit_Completion is not None:
             max_tokens = min(max_tokens, self.Token_Limit_Completion)
         if self.Args is not None:

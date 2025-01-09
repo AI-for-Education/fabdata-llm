@@ -33,12 +33,15 @@ class _ToolParamBase(BaseModel):
     description: Optional[str] = None
     default: Optional[Any] = None
 
-    def dict(self):
-        outdict = {"type": self.type}
+    def dict(self, type_upper=False):
+        if type_upper:
+            outdict = {"type": self.type.upper()}
+        else:
+            outdict = {"type": self.type}
         if self.description is not None:
             outdict["description"] = self.description
         if self.items is not None:
-            outdict["items"] = self.items.dict()
+            outdict["items"] = self.items.dict(type_upper=type_upper)
         if self.enum is not None:
             outdict["enum"] = self.enum
         return outdict
@@ -167,7 +170,7 @@ class ToolUsePlugin(ChatPlugin):
         self.Controller.Caller.Defaults["tools"] = self.format_tools()
 
     def format_tools(self):
-        return [self.Controller.Caller.format_tool(tool) for tool in self.Tools]
+        return self.Controller.Caller.format_tools(self.Tools)
 
     @property
     def tool_dict(self):

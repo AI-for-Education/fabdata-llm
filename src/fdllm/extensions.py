@@ -51,7 +51,7 @@ def general_query(
     if images and role == "system":
         raise ValueError("Can''t provide images if role=='system'")
     msg = _gen_message(jsonin, jsonout, role, images, detail)
-    ntok = len(caller.tokenize([msg]))
+    ntok = caller.count_tokens([msg])
     if max_input_tokens is not None and ntok > max_input_tokens:
         raise ValueError("Message is too long")
     max_tokens = caller.Token_Window - ntok
@@ -62,7 +62,7 @@ def general_query(
             while max_tokens < min_new_token_window:
                 jsonin, jsonout = reduce_callback(jsonin, jsonout)
                 msg = _gen_message(jsonin, jsonout, images)
-                ntok = len(caller.tokenize([msg]))
+                ntok = caller.count_tokens([msg])
                 max_tokens = caller.Token_Window - ntok
     out = caller.call(
         msg, max_tokens=max_tokens, temperature=temperature, **call_kwargs
