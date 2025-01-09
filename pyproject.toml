@@ -23,5 +23,6 @@ dependencies = [
     "numpy",
     "mistralai >= 0.1.0,<0.3",
     "pyyaml",
-    "google-auth == 2.32.*"
+    "google-auth == 2.32.*",
+    "google-genai == 0.3.*"
 ]
