@@ -202,7 +202,7 @@ class ChatController(BaseModel):
         latest_convo = build_messagelist()
         x = 1
         while (
-            len(self.Caller.tokenize(latest_convo))
+            self.Caller.count_tokens(latest_convo)
             > self.Caller.Token_Window - max_tokens
         ):
             if len(self.History) > 0:

@@ -21,6 +21,7 @@ from ..llmtypes import (
     LLMMessage,
     LLMToolCall,
 )
+from ..tooluse import Tool
 
 
 class OpenAICaller(LLMCaller):
@@ -131,6 +132,22 @@ class OpenAICaller(LLMCaller):
         else:
             return tokenize_chatgpt_messages(self.format_messagelist(messagelist))[0]
 
+    def format_tool(self, tool: Tool):
+        return {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {key: val.dict() for key, val in tool.params.items()},
+                    "required": [
+                        key for key, val in tool.params.items() if val.required
+                    ],
+                },
+            },
+        }
+
 
 def _gpt_common_fmt_output(output):
     if isinstance(output, GeneratorType):
@@ -151,4 +168,3 @@ def _gpt_common_fmt_output(output):
             return LLMMessage(Role="assistant", ToolCalls=tcs)
         else:
             raise ValueError("Output must be either content or tool call")
-

@@ -33,12 +33,15 @@ class _ToolParamBase(BaseModel):
     description: Optional[str] = None
     default: Optional[Any] = None
 
-    def dict(self):
-        outdict = {"type": self.type}
+    def dict(self, type_upper=False):
+        if type_upper:
+            outdict = {"type": self.type.upper()}
+        else:
+            outdict = {"type": self.type}
         if self.description is not None:
             outdict["description"] = self.description
         if self.items is not None:
-            outdict["items"] = self.items.dict()
+            outdict["items"] = self.items.dict(type_upper=type_upper)
         if self.enum is not None:
             outdict["enum"] = self.enum
         return outdict
@@ -87,43 +90,6 @@ class Tool(ABC, BaseModel):
             if val.required and param not in params:
                 raise ToolMissingParamError(f"Required param {param} not present")
         return valid_params
-
-    def dict(self, model="gpt-4-1106-preview"):
-        Modtype = LLMModelType.get_type(model)
-        if Modtype in (
-            OpenAIModelType,
-            AzureOpenAIModelType,
-            AzureMistralAIModelType,
-            VertexAIModelType,
-        ):
-            return {
-                "type": "function",
-                "function": {
-                    "name": self.name,
-                    "description": self.description,
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            key: val.dict() for key, val in self.params.items()
-                        },
-                        "required": [
-                            key for key, val in self.params.items() if val.required
-                        ],
-                    },
-                },
-            }
-        elif Modtype in (AnthropicModelType,):
-            return {
-                "name": self.name,
-                "description": self.description,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {key: val.dict() for key, val in self.params.items()},
-                    "required": [
-                        key for key, val in self.params.items() if val.required
-                    ],
-                },
-            }
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -201,12 +167,10 @@ class ToolUsePlugin(ChatPlugin):
         return self.pre_chat(prompt, *args, **kwargs)
 
     def pre_chat(self, prompt: str, *args, **kwargs):
-        self.Controller.Caller.Defaults["tools"] = self.dict(
-            self.Controller.Caller.Model.Name
-        )
+        self.Controller.Caller.Defaults["tools"] = self.format_tools()
 
-    def dict(self, model="gpt-4-1106-preview"):
-        return [tool.dict(model) for tool in self.Tools]
+    def format_tools(self):
+        return self.Controller.Caller.format_tools(self.Tools)
 
     @property
     def tool_dict(self):
