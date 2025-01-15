@@ -95,7 +95,10 @@ class GoogleGenAICaller(LLMCaller):
             ]
             return {"role": message.Role, "parts": content}
         else:
-            return {"role": message.Role, "parts": [{"text": message.Message}]}
+            role = message.Role
+            if role=="assistant":
+                role = "model"
+            return {"role": role, "parts": [{"text": message.Message}]}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         out = []
