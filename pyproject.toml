@@ -20,7 +20,7 @@ dependencies = [
     "python-dotenv == 1.*",
     "mistralai >= 0.1.0,<0.3",
     "google-auth == 2.32.*",
-    "google-genai == 0.3.*"
+    "google-genai == 0.3.*",
     "openai >= 1.55.3, < 1.56",
     "anthropic == 0.37.*",
     "tiktoken == 0.8.*",
@@ -28,3 +28,7 @@ dependencies = [
     "boto3 >=1.35.0,<1.36",
     "aioboto3 >=13.2.0,<13.3"
 ]
+
+
+[tool.pytest.ini_options]
+testpaths = [ "tests", ]

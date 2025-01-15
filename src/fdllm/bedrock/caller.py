@@ -18,6 +18,7 @@ from ..llmtypes import (
     LLMToolCall,
 )
 from ..constants import LLM_DEFAULT_MAX_TOKENS
+from ..tooluse import Tool
 
 encoding = tiktoken.get_encoding("gpt2")
 
@@ -174,16 +175,16 @@ class BedrockCaller(LLMCaller):
     def format_tool(self, tool: Tool):
         return {
             "toolSpec": {
-                "name": self.name,
-                "description": self.description,
+                "name": tool.name,
+                "description": tool.description,
                 "inputSchema": {
                     "json": {
                         "type": "object",
                         "properties": {
-                            key: val.dict() for key, val in self.params.items()
+                            key: val.dict() for key, val in tool.params.items()
                         },
                         "required": [
-                            key for key, val in self.params.items() if val.required
+                            key for key, val in tool.params.items() if val.required
                         ],
                     },
                 },
