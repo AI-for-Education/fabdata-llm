@@ -10,19 +10,25 @@ name = "fabdata-llm"
 version = "0.23.0"
 requires-python = ">=3.10, <3.13"
 dependencies = [
-    "pydantic == 2.*",
-    "python-dotenv == 1.*",
-    "openai >= 1.55.3, < 1.56",
-    "anthropic == 0.37.*",
-    "tiktoken == 0.8.*",
+    "pyyaml",
     "pytest",
     "pytest-cov",
     "pytest-dotenv",
-    "aiofiles == 24.*",
     "pillow",
     "numpy",
+    "pydantic == 2.*",
+    "python-dotenv == 1.*",
     "mistralai >= 0.1.0,<0.3",
-    "pyyaml",
     "google-auth == 2.32.*",
-    "google-genai == 0.3.*"
+    "google-genai == 0.3.*",
+    "openai >= 1.55.3, < 1.56",
+    "anthropic == 0.37.*",
+    "tiktoken == 0.8.*",
+    "google-auth == 2.32.*",
+    "boto3 >=1.35.0,<1.36",
+    "aioboto3 >=13.2.0,<13.3"
 ]
+
+
+[tool.pytest.ini_options]
+testpaths = [ "tests", ]

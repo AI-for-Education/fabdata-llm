@@ -9,6 +9,7 @@ from pathlib import Path
 from io import BytesIO
 from copy import copy
 import base64
+import json
 
 import numpy as np
 from openai import RateLimitError as RateLimitErrorOpenAI
@@ -21,7 +22,6 @@ from .decorators import delayedretry
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 from .sysutils import load_models, deepmerge_dicts, get_google_token
-
 
 class LLMModelType(BaseModel):
     Name: Optional[str]  # why is name optional?
@@ -66,6 +66,7 @@ class LLMModelType(BaseModel):
             "Anthropic": AnthropicModelType,
             "VertexAI": VertexAIModelType,
             "GoogleGenAI": GoogeGenAIModelType,
+            "Bedrock": BedrockModelType,
         }
 
     @classmethod
@@ -108,6 +109,17 @@ class AzureMistralAIModelType(LLMModelType):
 
 class AnthropicModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
+
+
+class BedrockModelType(LLMModelType):
+    Api_Key_Env_Var: str = "AWS_API_KEYS"
+
+    def _set_api_key_from_env(self):
+        if "aws_access_key_id" not in self.Client_Args:
+            env_api_key = os.getenv(self.Api_Key_Env_Var)
+            aws_access_key_id, aws_secret_access_key = env_api_key.split(" ")
+            self.Client_Args["aws_access_key_id"] = aws_access_key_id
+            self.Client_Args["aws_secret_access_key"] = aws_secret_access_key
 
 
 class VertexAIModelType(LLMModelType):
@@ -281,7 +293,7 @@ class LLMCaller(ABC, BaseModel):
     async def acall(
         self,
         messages: List[LLMMessage] | LLMMessage,
-        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
+        max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
         **kwargs,
     ):
         kwargs = self._proc_call_args(messages, max_tokens, **kwargs)

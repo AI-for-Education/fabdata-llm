@@ -14,6 +14,7 @@ from .llmtypes import (
     AzureOpenAIModelType,
     AzureMistralAIModelType,
     VertexAIModelType,
+    BedrockModelType,
 )
 from .chat import ChatPlugin
 
