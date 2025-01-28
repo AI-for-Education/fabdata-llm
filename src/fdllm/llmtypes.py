@@ -12,7 +12,7 @@ import base64
 import json
 
 import numpy as np
-from openai import RateLimitError as RateLimitErrorOpenAI
+from openai import RateLimitError as RateLimitErrorOpenAI, APIConnectionError
 from anthropic import RateLimitError as RateLimitErrorAnthropic
 from pydantic.dataclasses import dataclass
 from pydantic import ConfigDict, BaseModel, Field
@@ -315,7 +315,7 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic],
+        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic, APIConnectionError],
     )
     def _call(self, *args, **kwargs):
         return self.Func(*args, **kwargs)
@@ -323,7 +323,7 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic],
+        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic, APIConnectionError],
     )
     async def _acall(self, *args, **kwargs):
         return await self.AFunc(*args, **kwargs)
