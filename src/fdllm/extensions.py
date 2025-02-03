@@ -64,9 +64,9 @@ def general_query(
                 msg = _gen_message(jsonin, jsonout, images)
                 ntok = caller.count_tokens([msg])
                 max_tokens = caller.Token_Window - ntok
-    out = caller.call(
-        msg, max_tokens=max_tokens, temperature=temperature, **call_kwargs
-    )
+    if temperature is not None:
+        call_kwargs = {**call_kwargs, "temperature": temperature}
+    out = caller.call(msg, max_tokens=max_tokens, **call_kwargs)
 
     try:
         return ADict(json.loads(_trim_nonjson(out.Message)))

@@ -59,6 +59,26 @@ OpenAI:
       Token_Limit_Completion: 32768
       Tool_Use: False
       Vision: False
+    o1-2024-12-17:
+      Token_Window: 200000
+      Token_Limit_Completion: 100000
+      Tool_Use: True
+      Vision: True
+    o1:
+      Token_Window: 200000
+      Token_Limit_Completion: 100000
+      Tool_Use: True
+      Vision: True
+    o3-mini-2025-01-31:
+      Token_Window: 200000
+      Token_Limit_Completion: 100000
+      Tool_Use: True
+      Vision: True
+    o3-mini:
+      Token_Window: 200000
+      Token_Limit_Completion: 100000
+      Tool_Use: True
+      Vision: True
     o1-preview:
       Token_Window: 128000
       Token_Limit_Completion: 32768

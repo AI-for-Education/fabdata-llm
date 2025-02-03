@@ -101,6 +101,10 @@ class OpenAICaller(LLMCaller):
                 {"type": "text", "text": message.Message},
             ]
             return {"role": message.Role, "content": content}
+        elif message.Role == "system" and (
+            self.Model.Name.startswith(("o1-2024", "o3")) or self.Model.Name == "o1"
+        ):
+            return {"role": "developer", "content": message.Message}
         else:
             return {"role": message.Role, "content": message.Message}
 
