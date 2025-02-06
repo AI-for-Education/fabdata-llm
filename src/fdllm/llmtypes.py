@@ -33,6 +33,7 @@ class LLMModelType(BaseModel):
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Client_Args: dict = Field(default_factory=dict)
+    Extra_Body: dict = Field(default_factory=dict)
     Tool_Use: bool = False
     Vision: bool = False
     Flexible_SysMsg: bool = True

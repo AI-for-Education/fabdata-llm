@@ -11,6 +11,7 @@ from google.auth import default
 from google.auth.transport import requests
 
 from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2
+from ..sysutils import deepmerge_dicts
 from ..llmtypes import (
     LLMCaller,
     LLMCallArgs,
@@ -151,6 +152,16 @@ class OpenAICaller(LLMCaller):
                 },
             },
         }
+
+    def _proc_call_args(self, messages, max_tokens, **kwargs):
+        kwargs = super()._proc_call_args(messages, max_tokens, **kwargs)
+        if "extra_body" in kwargs:
+            kwargs["extra_body"] = deepmerge_dicts(
+                self.Model.Extra_Body, kwargs["extra_body"]
+            )
+        else:
+            kwargs["extra_body"] = self.Model.Extra_Body
+        return kwargs
 
 
 def _gpt_common_fmt_output(output):
