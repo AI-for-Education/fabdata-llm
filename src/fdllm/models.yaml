@@ -69,16 +69,6 @@ OpenAI:
       Token_Limit_Completion: 100000
       Tool_Use: True
       Vision: True
-    o3-mini-2025-01-31:
-      Token_Window: 200000
-      Token_Limit_Completion: 100000
-      Tool_Use: True
-      Vision: True
-    o3-mini:
-      Token_Window: 200000
-      Token_Limit_Completion: 100000
-      Tool_Use: True
-      Vision: True
     o1-preview:
       Token_Window: 128000
       Token_Limit_Completion: 32768
@@ -108,6 +98,39 @@ OpenAI:
       Token_Window: 128000
       Token_Limit_Completion: 4096
       Vision: True
+
+OpenAI_O3_Family:
+  Token_Window: 200000
+  Token_Limit_Completion: 100000
+  Tool_Use: True
+  Vision: True
+  models:
+    o3-mini-2025-01-31: {}
+    o3-mini: {}
+    o3-mini-low:
+      Api_Model_Name: o3-mini
+      Extra_Body:
+        reasoning_effort: low
+    o3-mini-medium:
+      Api_Model_Name: o3-mini
+      Extra_Body:
+        reasoning_effort: medium
+    o3-mini-high:
+      Api_Model_Name: o3-mini
+      Extra_Body:
+        reasoning_effort: high
+    o3-mini-2025-01-31-low:
+      Api_Model_Name: o3-mini-2025-01-31
+      Extra_Body:
+        reasoning_effort: low
+    o3-mini-2025-01-31-medium:
+      Api_Model_Name: o3-mini-2025-01-31
+      Extra_Body:
+        reasoning_effort: medium
+    o3-mini-2025-01-31-high:
+      Api_Model_Name: o3-mini-2025-01-31
+      Extra_Body:
+        reasoning_effort: high
 
 Anthropic:
   Api_Interface: Anthropic
