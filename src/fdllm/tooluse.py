@@ -65,6 +65,7 @@ class Tool(ABC, BaseModel):
     name: ClassVar[str]
     description: ClassVar[str]
     params: ClassVar[Dict[str, ToolParam]]
+    pass_through: ClassVar[bool] = False
 
     @abstractmethod
     def execute(self, **params):
@@ -123,10 +124,17 @@ class ToolUsePlugin(ChatPlugin):
         if result.ToolCalls is None:
             return result
         try:
-            resp = [
-                await self.tool_dict[tc.Name]._aexecute(**tc.Args)
-                for tc in result.ToolCalls
-            ]
+            resp = []
+            pass_through_idx = None
+            for idx, tc in enumerate(result.ToolCalls):
+                ### call each tool
+                ### if we hit a pass_through tool, we note
+                ### it for later directly insterting into the chat
+                tool = self.tool_dict[tc.Name]
+                res = await tool._aexecute(**tc.Args)
+                if tool.pass_through and pass_through_idx is None:
+                    pass_through_idx = idx
+                resp.append(res)
         except:
             self._tool_attempt += 1
             self.Controller.History.pop()
@@ -137,7 +145,11 @@ class ToolUsePlugin(ChatPlugin):
             self._tool_attempt = 0
             return result
         self._post_chat_appender(resp)
-        _, result = await self.Controller.achat("", *args, **kwargs)
+        if pass_through_idx is None:
+            _, result = await self.Controller.achat("", *args, **kwargs)
+        else:
+            result = LLMMessage(Role="assistant", Message=resp[pass_through_idx])
+            self.Controller.History.append(result)
         self._tool_attempt = 0
         return result
 
@@ -146,9 +158,17 @@ class ToolUsePlugin(ChatPlugin):
         if result.ToolCalls is None:
             return result
         try:
-            resp = [
-                self.tool_dict[tc.Name]._execute(**tc.Args) for tc in result.ToolCalls
-            ]
+            resp = []
+            pass_through_idx = None
+            for idx, tc in enumerate(result.ToolCalls):
+                ### call each tool
+                ### if we hit a pass_through tool, we note
+                ### it for later directly insterting into the chat
+                tool = self.tool_dict[tc.Name]
+                res = tool._execute(**tc.Args)
+                if tool.pass_through and pass_through_idx is None:
+                    pass_through_idx = idx
+                resp.append(res)
         except:
             self._tool_attempt += 1
             self.Controller.History.pop()
@@ -160,7 +180,11 @@ class ToolUsePlugin(ChatPlugin):
             self._tool_attempt = 0
             return result
         self._post_chat_appender(resp)
-        _, result = self.Controller.chat("", *args, **kwargs)
+        if pass_through_idx is None:
+            _, result = self.Controller.chat("", *args, **kwargs)
+        else:
+            result = LLMMessage(Role="assistant", Message=resp[pass_through_idx])
+            self.Controller.History.append(result)
         self._tool_attempt = 0
         return result
 
