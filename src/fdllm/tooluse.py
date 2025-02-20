@@ -89,10 +89,11 @@ class Tool(ABC, BaseModel):
             else:
                 valid_params[param] = val
         for param, val in self.params.items():
-            if val.required and param not in params:
-                raise ToolMissingParamError(f"Required param {param} not present")
-            else:
-                valid_params[param] = val.default
+            if param not in params:
+                if val.required:
+                    raise ToolMissingParamError(f"Required param {param} not present")
+                else:
+                    valid_params[param] = val.default
         return valid_params
 
     model_config = {"arbitrary_types_allowed": True}
