@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 from types import GeneratorType
 import json
 
@@ -7,6 +7,7 @@ import anthropic
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types import ToolUseBlock
 from anthropic._tokenizers import sync_get_tokenizer as get_tokenizer
+from pydantic import BaseModel
 
 from ..llmtypes import (
     LLMCaller,
@@ -29,13 +30,18 @@ class ClaudeCaller(LLMCaller):
         client = Anthropic(**model_.Client_Args)
         aclient = AsyncAnthropic(**model_.Client_Args)
 
+        call_args = LLMCallArgs(
+            Model="model",
+            Messages="messages",
+            Max_Tokens=model_.Max_Token_Arg_Name,
+            Response_Schema="tools",
+        )
+
         super().__init__(
             Model=model_,
             Func=client.messages.create,
             AFunc=aclient.messages.create,
-            Args=LLMCallArgs(
-                Model="model", Messages="messages", Max_Tokens="max_tokens"
-            ),
+            Args=call_args,
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
         )
@@ -109,15 +115,25 @@ class ClaudeCaller(LLMCaller):
             self.Defaults.pop("system", None)
         return out
 
-    def format_output(self, output):
+    def format_output(self, output, response_schema: Optional[BaseModel] = None):
         if isinstance(output, GeneratorType):
             return output
         else:
             if output.content is not None:
                 content = output.content
                 if isinstance(content[0], ToolUseBlock):
-                    out = LLMMessage(Role="assistant", Message="")
-                    output.content = [[], *output.content]
+                    if response_schema is not None:
+                        ### if the user has set a response_schema then the tool use block is
+                        ### to be processed as an output format, not as a tool call
+                        tool_use_block = output.content[0]
+                        object_key = response_schema.model_json_schema()["title"]
+                        structured_json = tool_use_block.input[object_key]
+                        formatted_content = json.dumps(structured_json)
+                        out = LLMMessage(Role="assistant", Message=formatted_content)
+                    else:
+                        # otherwise it should be processed as a tool call
+                        out = LLMMessage(Role="assistant", Message="")
+                        output.content = [[], *output.content]
                 else:
                     out = LLMMessage(Role="assistant", Message=output.content[0].text)
                 if len(output.content) > 1:
@@ -141,6 +157,48 @@ class ClaudeCaller(LLMCaller):
                 "required": [key for key, val in tool.params.items() if val.required],
             },
         }
+
+    def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
+        def resolve_refs(indict, refdict={}):
+            outdict = indict.copy()
+            for key, val in indict.items():
+                if isinstance(key, str) and key == "$ref":
+                    if len(indict) > 1:
+                        raise
+                    if isinstance(val, str) and val in refdict:
+                        return refdict[val]
+                elif isinstance(key, str) and key == "$defs":
+                    for refname, refval in val.items():
+                        refdict[f"#/$defs/{refname}"] = refval
+                elif isinstance(val, dict):
+                    outdict[key] = resolve_refs(val, refdict)
+                else:
+                    outdict[key] = val
+            return outdict
+
+        if response_schema is not None:
+            response_schema_resolved = resolve_refs(
+                response_schema.model_json_schema(), {}
+            )
+            response_schema = [
+                {
+                    "name": "structured_output",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            response_schema_resolved["title"]: {
+                                "type": response_schema_resolved["type"],
+                                "properties": response_schema_resolved["properties"],
+                            }
+                        },
+                    },
+                }
+            ]
+            kwargs["tool_choice"] = {"type": "tool", "name": "structured_output"}
+        kwargs = super()._proc_call_args(
+            messages, max_tokens, response_schema, **kwargs
+        )
+        return kwargs
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenizer(self.format_messagelist(messagelist))

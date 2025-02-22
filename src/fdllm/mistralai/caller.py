@@ -1,10 +1,11 @@
-from typing import List, Any
+from typing import List, Any, Optional
 from types import GeneratorType
 import json
 
 from mistralai.client import MistralClient
 from mistralai.async_client import MistralAsyncClient
 from mistralai.models.chat_completion import ChatMessage
+from pydantic import BaseModel
 
 from ..llmtypes import (
     LLMCaller,
@@ -54,7 +55,7 @@ class MistralCaller(LLMCaller):
     def format_messagelist(self, messagelist: List[LLMMessage]):
         return [self.format_message(message) for message in messagelist]
 
-    def format_output(self, output: Any):
+    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
         if isinstance(output, GeneratorType):
             return output
         else:

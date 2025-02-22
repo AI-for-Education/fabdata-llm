@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import List, Any, Optional
 from types import GeneratorType
 import json
 import os
@@ -9,6 +9,7 @@ from tempfile import NamedTemporaryFile
 from openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
 from google.auth import default
 from google.auth.transport import requests
+from pydantic import BaseModel
 
 from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2
 from ..sysutils import deepmerge_dicts
@@ -120,7 +121,7 @@ class OpenAICaller(LLMCaller):
                 out.append(outmsg)
         return out
 
-    def format_output(self, output: Any):
+    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
         return _gpt_common_fmt_output(output)
 
     def tokenize(self, messagelist: List[LLMMessage]):
@@ -155,7 +156,9 @@ class OpenAICaller(LLMCaller):
         }
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
-        kwargs = super()._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+        kwargs = super()._proc_call_args(
+            messages, max_tokens, response_schema, **kwargs
+        )
         if "extra_body" in kwargs:
             kwargs["extra_body"] = deepmerge_dicts(
                 self.Model.Extra_Body, kwargs["extra_body"]

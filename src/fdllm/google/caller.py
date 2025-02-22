@@ -1,8 +1,8 @@
 from types import GeneratorType
-from typing import Any, List
+from typing import Any, List, Optional
 
 from google import genai
-from pydantic import ConfigDict
+from pydantic import ConfigDict, BaseModel
 
 from ..llmtypes import LLMCallArgs, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
 from ..tooluse import Tool
@@ -95,7 +95,7 @@ class GoogleGenAICaller(LLMCaller):
             return {"role": message.Role, "parts": content}
         else:
             role = message.Role
-            if role=="assistant":
+            if role == "assistant":
                 role = "model"
             return {"role": role, "parts": [{"text": message.Message}]}
 
@@ -138,7 +138,9 @@ class GoogleGenAICaller(LLMCaller):
         }
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
-        kwargs = super()._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+        kwargs = super()._proc_call_args(
+            messages, max_tokens, response_schema, **kwargs
+        )
         # move parameters into config argument for genai client
         config = {"system_instruction": kwargs.pop("system", None)}
         for arg in [
@@ -158,7 +160,7 @@ class GoogleGenAICaller(LLMCaller):
         kwargs["config"] = config
         return kwargs
 
-    def format_output(self, output: Any):
+    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
         if isinstance(output, GeneratorType):
             return output
         else:

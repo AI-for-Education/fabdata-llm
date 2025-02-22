@@ -262,7 +262,9 @@ class LLMCaller(ABC, BaseModel):
         pass
 
     @abstractmethod
-    def format_output(self, output: Any) -> LLMMessage:
+    def format_output(
+        self, output: Any, response_schema: Optional[BaseModel] = None
+    ) -> LLMMessage:
         pass
 
     def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
@@ -293,7 +295,7 @@ class LLMCaller(ABC, BaseModel):
         **kwargs,
     ):
         kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-        return self.format_output(self._call(**kwargs))
+        return self.format_output(self._call(**kwargs), response_schema=response_schema)
 
     async def acall(
         self,
@@ -303,7 +305,9 @@ class LLMCaller(ABC, BaseModel):
         **kwargs,
     ):
         kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-        return self.format_output(await self._acall(**kwargs))
+        return self.format_output(
+            await self._acall(**kwargs), response_schema=response_schema
+        )
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         if isinstance(messages, LLMMessage):

@@ -7,7 +7,7 @@ import asyncio
 import boto3
 from botocore.exceptions import ClientError
 import tiktoken
-from itertools import chain
+from pydantic import BaseModel
 
 from ..llmtypes import (
     LLMCaller,
@@ -191,7 +191,7 @@ class BedrockCaller(LLMCaller):
             }
         }
 
-    def format_output(self, output: Any):
+    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
         if isinstance(output, GeneratorType):
             return output
         else:

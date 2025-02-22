@@ -134,6 +134,7 @@ OpenAI_O3_Family:
 
 Anthropic:
   Api_Interface: Anthropic
+  Max_Token_Arg_Name: max_tokens
   Flexible_SysMsg: False
   Token_Window: 200000
   Tool_Use: True
