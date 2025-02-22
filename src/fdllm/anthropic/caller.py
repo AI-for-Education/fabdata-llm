@@ -125,9 +125,7 @@ class ClaudeCaller(LLMCaller):
                     if response_schema is not None:
                         ### if the user has set a response_schema then the tool use block is
                         ### to be processed as an output format, not as a tool call
-                        tool_use_block = output.content[0]
-                        object_key = response_schema.model_json_schema()["title"]
-                        structured_json = tool_use_block.input[object_key]
+                        structured_json = output.content[0].input
                         formatted_content = json.dumps(structured_json)
                         out = LLMMessage(Role="assistant", Message=formatted_content)
                     else:
@@ -182,19 +180,17 @@ class ClaudeCaller(LLMCaller):
             )
             response_schema = [
                 {
-                    "name": "structured_output",
+                    "name": response_schema_resolved["title"],
                     "input_schema": {
                         "type": "object",
-                        "properties": {
-                            response_schema_resolved["title"]: {
-                                "type": response_schema_resolved["type"],
-                                "properties": response_schema_resolved["properties"],
-                            }
-                        },
+                        "properties": response_schema_resolved["properties"],
                     },
                 }
             ]
-            kwargs["tool_choice"] = {"type": "tool", "name": "structured_output"}
+            kwargs["tool_choice"] = {
+                "type": "tool",
+                "name": response_schema_resolved["title"],
+            }
         kwargs = super()._proc_call_args(
             messages, max_tokens, response_schema, **kwargs
         )
