@@ -41,12 +41,13 @@ class OpenAICaller(LLMCaller):
             Model="model",
             Messages="messages",
             Max_Tokens=model_.Max_Token_Arg_Name,
+            Response_Schema="response_format",
         )
 
         super().__init__(
             Model=model_,
-            Func=client.chat.completions.create,
-            AFunc=aclient.chat.completions.create,
+            Func=client.beta.chat.completions.parse,
+            AFunc=aclient.beta.chat.completions.parse,
             Args=call_args,
             Defaults={},
             Token_Window=model_.Token_Window,

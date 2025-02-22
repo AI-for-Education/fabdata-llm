@@ -27,6 +27,7 @@ class GoogleGenAICaller(LLMCaller):
             Model="model",
             Messages="contents",
             Max_Tokens=model.Max_Token_Arg_Name,
+            Response_Schema="response_schema",
         )
 
         # drop CallArgs for google?
@@ -148,9 +149,12 @@ class GoogleGenAICaller(LLMCaller):
             "top_k",
             "stop_sequences",
             "seed",
+            "response_mime_type",
             "response_schema",
         ]:
             config[arg] = kwargs.pop(arg, None)
+        if "response_schema" in config:
+            config["response_mime_type"] = "application/json"
         kwargs["config"] = config
         return kwargs
 

@@ -24,6 +24,7 @@ from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 from .sysutils import load_models, deepmerge_dicts, get_google_token
 
+
 class LLMModelType(BaseModel):
     Name: Optional[str]  # why is name optional?
     Api_Interface: str
@@ -240,6 +241,7 @@ class LLMCallArgs:
     Messages: str
     Model: str
     Max_Tokens: str
+    Response_Schema: Optional[str] = None
 
 
 class LLMCaller(ABC, BaseModel):
@@ -287,21 +289,23 @@ class LLMCaller(ABC, BaseModel):
         self,
         messages: List[LLMMessage] | LLMMessage,
         max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: Optional[BaseModel] = None,
         **kwargs,
     ):
-        kwargs = self._proc_call_args(messages, max_tokens, **kwargs)
+        kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
         return self.format_output(self._call(**kwargs))
 
     async def acall(
         self,
         messages: List[LLMMessage] | LLMMessage,
         max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: Optional[BaseModel] = None,
         **kwargs,
     ):
-        kwargs = self._proc_call_args(messages, max_tokens, **kwargs)
+        kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
         return self.format_output(await self._acall(**kwargs))
 
-    def _proc_call_args(self, messages, max_tokens, **kwargs):
+    def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         if isinstance(messages, LLMMessage):
             messages = [messages]
         if max_tokens is None:
@@ -312,12 +316,19 @@ class LLMCaller(ABC, BaseModel):
             kwargs[self.Args.Model] = self.Model.Api_Model_Name
             kwargs[self.Args.Max_Tokens] = max_tokens
             kwargs[self.Args.Messages] = self.format_messagelist(messages)
+            if self.Args.Response_Schema is not None:
+                kwargs[self.Args.Response_Schema] = response_schema
         return {**self.Defaults, **kwargs}
 
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic, APIConnectionError, ServerError],
+        include_errors=[
+            RateLimitErrorOpenAI,
+            RateLimitErrorAnthropic,
+            APIConnectionError,
+            ServerError,
+        ],
     )
     def _call(self, *args, **kwargs):
         return self.Func(*args, **kwargs)
@@ -325,7 +336,12 @@ class LLMCaller(ABC, BaseModel):
     @delayedretry(
         rethrow_final_error=True,
         max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[RateLimitErrorOpenAI, RateLimitErrorAnthropic, APIConnectionError, ServerError],
+        include_errors=[
+            RateLimitErrorOpenAI,
+            RateLimitErrorAnthropic,
+            APIConnectionError,
+            ServerError,
+        ],
     )
     async def _acall(self, *args, **kwargs):
         return await self.AFunc(*args, **kwargs)
