@@ -154,8 +154,8 @@ class OpenAICaller(LLMCaller):
             },
         }
 
-    def _proc_call_args(self, messages, max_tokens, **kwargs):
-        kwargs = super()._proc_call_args(messages, max_tokens, **kwargs)
+    def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
+        kwargs = super()._proc_call_args(messages, max_tokens, response_schema, **kwargs)
         if "extra_body" in kwargs:
             kwargs["extra_body"] = deepmerge_dicts(
                 self.Model.Extra_Body, kwargs["extra_body"]

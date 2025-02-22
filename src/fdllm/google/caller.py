@@ -137,8 +137,8 @@ class GoogleGenAICaller(LLMCaller):
             ]
         }
 
-    def _proc_call_args(self, messages, max_tokens, **kwargs):
-        kwargs = super()._proc_call_args(messages, max_tokens, **kwargs)
+    def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
+        kwargs = super()._proc_call_args(messages, max_tokens, response_schema, **kwargs)
         # move parameters into config argument for genai client
         config = {"system_instruction": kwargs.pop("system", None)}
         for arg in [
