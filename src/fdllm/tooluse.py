@@ -146,10 +146,10 @@ class ToolUsePlugin(ChatPlugin):
                 prompt = maybe_prompt.Message
             else:
                 self.Controller.History.append(maybe_prompt)
-                prompt = None
+                prompt = ""
             if self._tool_attempt > self._max_tool_attempt:
                 raise
-            _, result = await self.Controller.achat(prompt.Message, *args, **kwargs)
+            _, result = await self.Controller.achat(prompt, *args, **kwargs)
             self._tool_attempt = 0
             return result
         self._post_chat_appender(resp)
@@ -185,11 +185,11 @@ class ToolUsePlugin(ChatPlugin):
                 prompt = maybe_prompt.Message
             else:
                 self.Controller.History.append(maybe_prompt)
-                prompt = None
+                prompt = ""
             if self._tool_attempt > self._max_tool_attempt:
                 self._tool_attempt = 0
                 raise
-            _, result = self.Controller.chat(prompt.Message, *args, **kwargs)
+            _, result = self.Controller.chat(prompt, *args, **kwargs)
             self._tool_attempt = 0
             return result
         self._post_chat_appender(resp)
