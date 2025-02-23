@@ -151,7 +151,9 @@ class OpenAICaller(LLMCaller):
                     "required": [
                         key for key, val in tool.params.items() if val.required
                     ],
+                    "additionalProperties": False,
                 },
+                "strict": True,
             },
         }
 

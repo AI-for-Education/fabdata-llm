@@ -155,8 +155,10 @@ class GoogleGenAICaller(LLMCaller):
             "response_schema",
         ]:
             config[arg] = kwargs.pop(arg, None)
-        if "response_schema" in config:
+        if config.get("response_schema"):
             config["response_mime_type"] = "application/json"
+        else:
+            config.pop("response_schema", None)
         kwargs["config"] = config
         return kwargs
 

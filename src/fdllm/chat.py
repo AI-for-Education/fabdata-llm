@@ -70,49 +70,51 @@ class ChatController(BaseModel):
         self,
         prompt: str = "",
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: Optional[BaseModel] = None,
         images: Optional[List[Image.Image]] = None,
         detail: Literal["low", "high"] = "low",
         **kwargs,
     ):
-        self._run_plugins(prompt, max_tokens, images, detail, **kwargs)
+        self._run_plugins(prompt, max_tokens, response_schema, images, detail, **kwargs)
         try:
             new_message, latest_convo = self._prechat(
                 prompt, max_tokens, images, detail
             )
         except:
-            self._clean_plugins(None, max_tokens, images, detail, **kwargs)
+            self._clean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             raise
         if new_message is not None and new_message.Role == "error":
-            self._clean_plugins(None, max_tokens, images, detail, **kwargs)
+            self._clean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             return new_message, None
-        result = self.Caller.call(latest_convo, max_tokens, **kwargs)
+        result = self.Caller.call(latest_convo, max_tokens, response_schema, **kwargs)
         self._postchat(result)
-        result = self._clean_plugins(result, max_tokens, images, detail, **kwargs)
+        result = self._clean_plugins(result, max_tokens, response_schema, images, detail, **kwargs)
         return new_message, result
 
     async def achat(
         self,
         prompt: str = "",
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: Optional[BaseModel] = None,
         images: Optional[List[Image.Image]] = None,
         detail: Literal["low", "high"] = "low",
         **kwargs,
     ):
-        await self._arun_plugins(prompt, max_tokens, images, detail, **kwargs)
+        await self._arun_plugins(prompt, max_tokens, response_schema, images, detail, **kwargs)
         try:
             new_message, latest_convo = self._prechat(
                 prompt, max_tokens, images, detail
             )
         except:
-            await self._aclean_plugins(None, max_tokens, images, detail, **kwargs)
+            await self._aclean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             raise
         if new_message is not None and new_message.Role == "error":
-            await self._aclean_plugins(None, max_tokens, images, detail, **kwargs)
+            await self._aclean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             return new_message, None
-        result = await self.Caller.acall(latest_convo, max_tokens, **kwargs)
+        result = await self.Caller.acall(latest_convo, max_tokens, response_schema, **kwargs)
         self._postchat(result)
         result = await self._aclean_plugins(
-            result, max_tokens, images, detail, **kwargs
+            result, max_tokens, response_schema, images, detail, **kwargs
         )
         return new_message, result
 

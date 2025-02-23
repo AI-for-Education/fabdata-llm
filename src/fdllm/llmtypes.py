@@ -320,7 +320,7 @@ class LLMCaller(ABC, BaseModel):
             kwargs[self.Args.Model] = self.Model.Api_Model_Name
             kwargs[self.Args.Max_Tokens] = max_tokens
             kwargs[self.Args.Messages] = self.format_messagelist(messages)
-            if self.Args.Response_Schema is not None:
+            if self.Args.Response_Schema is not None and response_schema is not None:
                 kwargs[self.Args.Response_Schema] = response_schema
         return {**self.Defaults, **kwargs}
 
