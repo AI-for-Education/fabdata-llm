@@ -1,6 +1,6 @@
 ## Introduction
 
-FabData-LLM is a Python package that provides set of high-level abstractions around various LLM API providers. It currently covers OpenAI, Azure OpenAI, Anthropic, Azure Mistral AI and Google Vertex. It can also use any models exposed via an OpenAI compatible API.  
+FabData-LLM is a Python package that provides set of high-level abstractions around various LLM API providers. It currently covers OpenAI, Azure OpenAI, Anthropic, Azure Mistral AI, Google Vertex, Google GenAI, and Amazon Bedrock. It can also use any models exposed via an OpenAI compatible API (e.g. OpenRouter, FireWorks, etc.).  
 
 ### Why you might consider using this
 
@@ -194,19 +194,22 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
         ```env
         # will apply globally to all models that use the OpenAI API
             OPENAI_API_KEY
-        # will apply globally to all models that use the Azure OpenAI API
+        # Azure OpenAI API
             AZURE_OPENAI_API_KEY
             AZURE_OPENAI_ENDPOINT
             OPENAI_API_VERSION
-        # will apply globally to all models that use the Anthropic API
+        # Anthropic API
             ANTHROPIC_API_KEY
-        # will apply globally to all models that use the Mistral API
+        # Google Gen AI API
+            GEMINI_API_KEY
+        # Amazon Bedrock API
+            AWS_API_KEYS
+            # this variable should contain both "aws_access_key_id" and 
+            # "aws_secret_access_key" separated by a space
+        # Mistral API
             MISTRAL_API_KEY
         ``````
     
-- You want to use the latest models, such as ```gpt-4-turbo-2024-04-09``` and ```gpt-4o``` from OpenAI, ```claude-3-opus-20240229``` from Anthropic, and `Mistral-large` (hosted on Azure AI)
-    - FabData-LLM supports the latest versions of OpenAI's and Anthropics's APIs (1.52 and 0.37.0 respectively at the time of writing) and the latest models, including multi-modal models
-    - FabData-LLM supports Mistral AI models hosted on Azure AI endpoints
 - You want all of this functionality in both sync and async applications
     - All LLMCaller objects have two call methods: ```call``` and ```acall```
     - ChatController object has two chat methods: ```chat``` and ```achat```
