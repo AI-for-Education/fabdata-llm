@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
+from openai.lib._parsing._completions import type_to_response_format_param
 from google.auth import default
 from google.auth.transport import requests
 from pydantic import BaseModel
@@ -47,8 +48,8 @@ class OpenAICaller(LLMCaller):
 
         super().__init__(
             Model=model_,
-            Func=client.beta.chat.completions.parse,
-            AFunc=aclient.beta.chat.completions.parse,
+            Func=client.chat.completions.create,
+            AFunc=aclient.chat.completions.create,
             Args=call_args,
             Defaults={},
             Token_Window=model_.Token_Window,
@@ -151,13 +152,13 @@ class OpenAICaller(LLMCaller):
                     "required": [
                         key for key, val in tool.params.items() if val.required
                     ],
-                    "additionalProperties": False,
                 },
-                "strict": True,
             },
         }
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
+        if response_schema is not None:
+            response_schema = type_to_response_format_param(response_schema)
         kwargs = super()._proc_call_args(
             messages, max_tokens, response_schema, **kwargs
         )

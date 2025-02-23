@@ -118,24 +118,24 @@ class GoogleGenAICaller(LLMCaller):
         return out
 
     def format_tool(self, tool: Tool):
-        return {
-            "function_declarations": [
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": {
-                        "type": "OBJECT",
-                        "properties": {
-                            key: val.dict(type_upper=True)
-                            for key, val in tool.params.items()
-                        },
-                        "required": [
-                            key for key, val in tool.params.items() if val.required
-                        ],
-                    },
-                }
-            ]
+        tool_dict = {
+            "name": tool.name,
+            "description": tool.description,
         }
+        if tool.params:
+            tool_dict["parameters"] = (
+                {
+                    "type": "OBJECT",
+                    "properties": {
+                        key: val.dict(type_upper=True)
+                        for key, val in tool.params.items()
+                    },
+                    "required": [
+                        key for key, val in tool.params.items() if val.required
+                    ],
+                },
+            )
+        return {"function_declarations": [tool_dict]}
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         kwargs = super()._proc_call_args(
