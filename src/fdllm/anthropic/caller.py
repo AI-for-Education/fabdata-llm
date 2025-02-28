@@ -5,13 +5,12 @@ import json
 
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
-from anthropic.types import ToolUseBlock
-from anthropic._tokenizers import sync_get_tokenizer as get_tokenizer
-from pydantic import BaseModel
+from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
+from pydantic import BaseModel, ConfigDict
 
 from ..llmtypes import (
     LLMCaller,
-    LLMCallArgs,
+    LLMCallArgNames,
     AnthropicModelType,
     LLMModelType,
     LLMMessage,
@@ -21,6 +20,9 @@ from ..tooluse import Tool
 
 
 class ClaudeCaller(LLMCaller):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    Client: anthropic._base_client.BaseClient
+    
     def __init__(self, model: str = "claude-3-5-sonnet-latest"):
         Modtype = LLMModelType.get_type(model)
         if Modtype not in [AnthropicModelType]:
@@ -30,7 +32,7 @@ class ClaudeCaller(LLMCaller):
         client = Anthropic(**model_.Client_Args)
         aclient = AsyncAnthropic(**model_.Client_Args)
 
-        call_args = LLMCallArgs(
+        call_arg_names = LLMCallArgNames(
             Model="model",
             Messages="messages",
             Max_Tokens=model_.Max_Token_Arg_Name,
@@ -39,11 +41,12 @@ class ClaudeCaller(LLMCaller):
 
         super().__init__(
             Model=model_,
-            Func=client.messages.create,
-            AFunc=aclient.messages.create,
-            Args=call_args,
+            Func=client.beta.messages.create,
+            AFunc=aclient.beta.messages.create,
+            Arg_Names=call_arg_names,
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
+            Client=client,
         )
 
     def format_message(self, message: LLMMessage):
@@ -121,7 +124,9 @@ class ClaudeCaller(LLMCaller):
         else:
             if output.content is not None:
                 content = output.content
-                if isinstance(content[0], ToolUseBlock):
+                if isinstance(content[0], BetaThinkingBlock):
+                    thinking = content.pop(0)
+                if isinstance(content[0], BetaToolUseBlock):
                     if response_schema is not None:
                         ### if the user has set a response_schema then the tool use block is
                         ### to be processed as an output format, not as a tool call
@@ -131,10 +136,10 @@ class ClaudeCaller(LLMCaller):
                     else:
                         # otherwise it should be processed as a tool call
                         out = LLMMessage(Role="assistant", Message="")
-                        output.content = [[], *output.content]
+                        content = [[], content]
                 else:
-                    out = LLMMessage(Role="assistant", Message=output.content[0].text)
-                if len(output.content) > 1:
+                    out = LLMMessage(Role="assistant", Message=content[0].text)
+                if len(content) > 1:
                     out.ToolCalls = []
                     for tcout in output.content[1:]:
                         tc = LLMToolCall(
@@ -196,11 +201,16 @@ class ClaudeCaller(LLMCaller):
         )
         return kwargs
 
-    def tokenize(self, messagelist: List[LLMMessage]):
-        return tokenizer(self.format_messagelist(messagelist))
+    # def tokenize(self, messagelist: List[LLMMessage]):
+    #     return tokenizer(self.format_messagelist(messagelist))
+
+    def count_tokens(self, messagelist: List[LLMMessage]):
+        return self.Client.beta.messages.count_tokens(
+            model=self.Model.Api_Model_Name, messages=self.format_messagelist(messagelist)
+        ).input_tokens
 
 
-def tokenizer(messagelist):
-    tokenizer_ = get_tokenizer()
-    outstrs = [f"role: {msg['role']} content: {msg['content']}" for msg in messagelist]
-    return tokenizer_.encode("\n".join(outstrs))
+# def tokenizer(messagelist):
+#     tokenizer_ = get_tokenizer()
+#     outstrs = [f"role: {msg['role']} content: {msg['content']}" for msg in messagelist]
+#     return tokenizer_.encode("\n".join(outstrs))

@@ -1,5 +1,16 @@
 from __future__ import annotations
-from typing import List, Literal, Callable, Awaitable, Any, Optional, Dict, Union, Type
+from typing import (
+    List,
+    Literal,
+    Callable,
+    Awaitable,
+    Any,
+    Optional,
+    Dict,
+    Union,
+    Type,
+    ClassVar,
+)
 import datetime
 from abc import ABC, abstractmethod
 import os
@@ -34,6 +45,7 @@ class LLMModelType(BaseModel):
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Client_Args: dict = Field(default_factory=dict)
+    Call_Args: dict = Field(default_factory=dict)
     Extra_Body: dict = Field(default_factory=dict)
     Tool_Use: bool = False
     Vision: bool = False
@@ -237,7 +249,7 @@ class LLMImage(BaseModel):
 
 
 @dataclass(config=ConfigDict(validate_assignment=True))
-class LLMCallArgs:
+class LLMCallArgNames:
     Messages: str
     Model: str
     Max_Tokens: str
@@ -251,7 +263,7 @@ class LLMCaller(ABC, BaseModel):
     Token_Window: int
     Token_Limit_Completion: Optional[int] = None
     Defaults: Dict = Field(default_factory=dict)
-    Args: Optional[LLMCallArgs] = None
+    Arg_Names: Optional[LLMCallArgNames] = None
 
     @abstractmethod
     def format_message(self, message: LLMMessage):
@@ -316,13 +328,16 @@ class LLMCaller(ABC, BaseModel):
             max_tokens = self.Token_Window - (self.count_tokens(messages) + 64)
         if self.Token_Limit_Completion is not None:
             max_tokens = min(max_tokens, self.Token_Limit_Completion)
-        if self.Args is not None:
-            kwargs[self.Args.Model] = self.Model.Api_Model_Name
-            kwargs[self.Args.Max_Tokens] = max_tokens
-            kwargs[self.Args.Messages] = self.format_messagelist(messages)
-            if self.Args.Response_Schema is not None and response_schema is not None:
-                kwargs[self.Args.Response_Schema] = response_schema
-        return {**self.Defaults, **kwargs}
+        if self.Arg_Names is not None:
+            kwargs[self.Arg_Names.Model] = self.Model.Api_Model_Name
+            kwargs[self.Arg_Names.Max_Tokens] = max_tokens
+            kwargs[self.Arg_Names.Messages] = self.format_messagelist(messages)
+            if (
+                self.Arg_Names.Response_Schema is not None
+                and response_schema is not None
+            ):
+                kwargs[self.Arg_Names.Response_Schema] = response_schema
+        return {**self.Model.Call_Args, **self.Defaults, **kwargs}
 
     @delayedretry(
         rethrow_final_error=True,

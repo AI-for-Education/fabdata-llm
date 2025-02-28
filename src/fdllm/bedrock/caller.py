@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from ..llmtypes import (
     LLMCaller,
-    LLMCallArgs,
+    LLMCallArgNames,
     BedrockModelType,
     LLMModelType,
     LLMMessage,
@@ -55,7 +55,7 @@ class BedrockCaller(LLMCaller):
             service_name="bedrock-runtime", **model_.Client_Args
         )
 
-        call_args = LLMCallArgs(
+        call_arg_names = LLMCallArgNames(
             Model="modelId",
             Messages="messages",
             Max_Tokens=model_.Max_Token_Arg_Name,
@@ -65,7 +65,7 @@ class BedrockCaller(LLMCaller):
             Model=model_,
             Func=client.converse,
             AFunc=bedrock_async_wrapper(aclient),
-            Args=call_args,
+            Arg_Names=call_arg_names,
             Defaults={},
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
@@ -82,9 +82,9 @@ class BedrockCaller(LLMCaller):
         except Exception:
             pass
 
-    def _proc_call_args(self, messages, max_tokens, **kwargs):
+    def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         # adjust args for bedrock format
-        kwargs = super()._proc_call_args(messages, max_tokens, **kwargs)
+        kwargs = super()._proc_call_args(messages, max_tokens, response_schema, **kwargs)
         inferenceConfig = {}
         inferenceConfig["maxTokens"] = kwargs.pop(self.Args.Max_Tokens)
         for arg in ["temperature", "topP", "stopSequences"]:

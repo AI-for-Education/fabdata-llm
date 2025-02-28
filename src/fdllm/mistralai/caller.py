@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from ..llmtypes import (
     LLMCaller,
-    LLMCallArgs,
+    LLMCallArgNames,
     AzureMistralAIModelType,
     LLMModelType,
     LLMMessage,
@@ -39,7 +39,7 @@ class MistralCaller(LLMCaller):
             Model=model_,
             Func=client.chat,
             AFunc=aclient.chat,
-            Args=LLMCallArgs(
+            Arg_Names=LLMCallArgNames(
                 Model="model",
                 Messages="messages",
                 Max_Tokens="max_tokens",

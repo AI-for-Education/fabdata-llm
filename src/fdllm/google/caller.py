@@ -4,7 +4,7 @@ from typing import Any, List, Optional
 from google import genai
 from pydantic import ConfigDict, BaseModel
 
-from ..llmtypes import LLMCallArgs, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
+from ..llmtypes import LLMCallArgNames, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
 from ..tooluse import Tool
 
 
@@ -17,13 +17,13 @@ class GoogleGenAICaller(LLMCaller):
         model: LLMModelType = Modtype(Name=model)
 
         # Gemini Models
-        client = genai.Client(api_key=model.Client_Args["api_key"])
+        client = genai.Client(**model.Client_Args)
         # TODO: support vertex models
         # client = genai.Client(
         #     vertexai=True, project="your-project-id", location="us-central1"
         # )
 
-        call_args = LLMCallArgs(
+        call_arg_names = LLMCallArgNames(
             Model="model",
             Messages="contents",
             Max_Tokens=model.Max_Token_Arg_Name,
@@ -35,7 +35,7 @@ class GoogleGenAICaller(LLMCaller):
             Model=model,
             Func=client.models.generate_content,
             AFunc=client.aio.models.generate_content,
-            Args=call_args,
+            Arg_Names=call_arg_names,
             Defaults={},
             Token_Window=model.Token_Window,
             Token_Limit_Completion=model.Token_Limit_Completion,
@@ -139,7 +139,7 @@ class GoogleGenAICaller(LLMCaller):
         # move parameters into config argument for genai client
         config = {"system_instruction": kwargs.pop("system", None)}
         for arg in [
-            self.Args.Max_Tokens,
+            self.Arg_Names.Max_Tokens,
             "tools",
             "temperature",
             "top_p",
@@ -183,5 +183,5 @@ class GoogleGenAICaller(LLMCaller):
     # https://medium.com/google-cloud/counting-gemini-text-tokens-locally-with-the-vertex-ai-sdk-78979fea6244
     def count_tokens(self, messagelist: List[LLMMessage]):
         return self.Client.models.count_tokens(
-            model=self.Model.Name, contents=self.format_messagelist(messagelist)
+            model=self.Model.Api_Model_Name, contents=self.format_messagelist(messagelist)
         ).total_tokens

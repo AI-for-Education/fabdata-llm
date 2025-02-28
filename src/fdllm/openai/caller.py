@@ -16,7 +16,7 @@ from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2
 from ..sysutils import deepmerge_dicts
 from ..llmtypes import (
     LLMCaller,
-    LLMCallArgs,
+    LLMCallArgNames,
     OpenAIModelType,
     VertexAIModelType,
     AzureOpenAIModelType,
@@ -39,7 +39,7 @@ class OpenAICaller(LLMCaller):
             client = AzureOpenAI(azure_deployment=model, **model_.Client_Args)
             aclient = AsyncAzureOpenAI(azure_deployment=model, **model_.Client_Args)
 
-        call_args = LLMCallArgs(
+        call_arg_names = LLMCallArgNames(
             Model="model",
             Messages="messages",
             Max_Tokens=model_.Max_Token_Arg_Name,
@@ -50,7 +50,7 @@ class OpenAICaller(LLMCaller):
             Model=model_,
             Func=client.chat.completions.create,
             AFunc=aclient.chat.completions.create,
-            Args=call_args,
+            Arg_Names=call_arg_names,
             Defaults={},
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,

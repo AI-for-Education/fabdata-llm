@@ -109,28 +109,62 @@ OpenAI_O3_Family:
     o3-mini: {}
     o3-mini-low:
       Api_Model_Name: o3-mini
-      Extra_Body:
+      Call_Args:
         reasoning_effort: low
     o3-mini-medium:
       Api_Model_Name: o3-mini
-      Extra_Body:
+      Call_Args:
         reasoning_effort: medium
     o3-mini-high:
       Api_Model_Name: o3-mini
-      Extra_Body:
+      Call_args:
         reasoning_effort: high
     o3-mini-2025-01-31-low:
       Api_Model_Name: o3-mini-2025-01-31
-      Extra_Body:
+      Call_Args:
         reasoning_effort: low
     o3-mini-2025-01-31-medium:
       Api_Model_Name: o3-mini-2025-01-31
-      Extra_Body:
+      Call_Args:
         reasoning_effort: medium
     o3-mini-2025-01-31-high:
       Api_Model_Name: o3-mini-2025-01-31
-      Extra_Body:
+      Call_Args:
         reasoning_effort: high
+
+Anthropic_Thinking:
+  Api_Interface: Anthropic
+  Max_Token_Arg_Name: max_tokens
+  Flexible_SysMsg: False
+  Token_Window: 200000
+  Token_Limit_Completion: 128000
+  Tool_Use: False
+  Vision: True
+  models:
+    claude-3-7-sonnet-latest-high:
+      Api_Model_Name: claude-3-7-sonnet-latest
+      Call_Args:
+        timeout: 20
+        betas: ["output-128k-2025-02-19"]
+        thinking:
+          type: enabled
+          budget_tokens: 64000
+    claude-3-7-sonnet-latest-medium:
+      Api_Model_Name: claude-3-7-sonnet-latest
+      Call_Args:
+        timeout: 20
+        betas: ["output-128k-2025-02-19"]
+        thinking:
+          type: enabled
+          budget_tokens: 32000
+    claude-3-7-sonnet-latest-low:
+      Api_Model_Name: claude-3-7-sonnet-latest
+      Call_Args:
+        timeout: 20
+        betas: ["output-128k-2025-02-19"]
+        thinking:
+          type: enabled
+          budget_tokens: 16000
 
 Anthropic:
   Api_Interface: Anthropic
@@ -140,6 +174,8 @@ Anthropic:
   Tool_Use: True
   Vision: True
   models:
+    claude-3-7-sonnet-latest:
+      Token_Limit_Completion: 8192
     claude-3-5-sonnet-latest:
       Token_Limit_Completion: 8192
     claude-3-5-sonnet-20241022:
@@ -250,8 +286,6 @@ Google:
   Api_Key_Env_Var: GEMINI_API_KEY
   Vision: True
   Tool_Use: True
-  Client_Args:
-    api_type: gemini
   Token_Window: 1048576
   Token_Limit_Completion: 8192
   models:
