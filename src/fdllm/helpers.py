@@ -1,4 +1,4 @@
-from .anthropic import ClaudeCaller
+from .anthropic import ClaudeCaller, ClaudeStreamingCaller
 from .llmtypes import LLMCaller
 from .mistralai import MistralCaller
 from .openai import OpenAICaller
@@ -11,6 +11,7 @@ API_CALLERS = {
     "AzureOpenAI": OpenAICaller,
     "AzureMistralAI": MistralCaller,
     "Anthropic": ClaudeCaller,
+    "AnthropicStreaming": ClaudeStreamingCaller,
     "AnthropicVision": ClaudeCaller,
     "VertexAI": OpenAICaller,
     "GoogleGenAI": GoogleGenAICaller,

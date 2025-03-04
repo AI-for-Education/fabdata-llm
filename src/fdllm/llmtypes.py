@@ -79,6 +79,7 @@ class LLMModelType(BaseModel):
             "AzureOpenAI": AzureOpenAIModelType,
             "AzureMistralAI": AzureMistralAIModelType,
             "Anthropic": AnthropicModelType,
+            "AnthropicStreaming": AnthropicStreamingModelType,
             "VertexAI": VertexAIModelType,
             "GoogleGenAI": GoogeGenAIModelType,
             "Bedrock": BedrockModelType,
@@ -125,6 +126,8 @@ class AzureMistralAIModelType(LLMModelType):
 class AnthropicModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
 
+class AnthropicStreamingModelType(LLMModelType):
+    Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
 
 class BedrockModelType(LLMModelType):
     Api_Key_Env_Var: str = "AWS_API_KEYS"

@@ -1,28 +1,33 @@
 import os
 from typing import List, Optional
 from types import GeneratorType
+from collections import deque
 import json
 
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
+from anthropic import RateLimitError as RateLimitErrorAnthropic
+from ..constants import LLM_DEFAULT_MAX_RETRIES
 from pydantic import BaseModel, ConfigDict
 
 from ..llmtypes import (
     LLMCaller,
     LLMCallArgNames,
     AnthropicModelType,
+    AnthropicStreamingModelType,
     LLMModelType,
     LLMMessage,
     LLMToolCall,
 )
 from ..tooluse import Tool
+from ..decorators import delayedretry
 
 
 class ClaudeCaller(LLMCaller):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     Client: anthropic._base_client.BaseClient
-    
+
     def __init__(self, model: str = "claude-3-5-sonnet-latest"):
         Modtype = LLMModelType.get_type(model)
         if Modtype not in [AnthropicModelType]:
@@ -206,8 +211,63 @@ class ClaudeCaller(LLMCaller):
 
     def count_tokens(self, messagelist: List[LLMMessage]):
         return self.Client.beta.messages.count_tokens(
-            model=self.Model.Api_Model_Name, messages=self.format_messagelist(messagelist)
+            model=self.Model.Api_Model_Name,
+            messages=self.format_messagelist(messagelist),
         ).input_tokens
+
+
+class ClaudeStreamingCaller(ClaudeCaller):
+    def __init__(self, model: str = "claude-3-5-sonnet-latest"):
+        Modtype = LLMModelType.get_type(model)
+        if Modtype not in [AnthropicStreamingModelType]:
+            raise ValueError(f"{model} is not supported")
+
+        model_: LLMModelType = Modtype(Name=model)
+        client = Anthropic(**model_.Client_Args)
+        aclient = AsyncAnthropic(**model_.Client_Args)
+
+        call_arg_names = LLMCallArgNames(
+            Model="model",
+            Messages="messages",
+            Max_Tokens=model_.Max_Token_Arg_Name,
+            Response_Schema="tools",
+        )
+
+        LLMCaller.__init__(
+            self,
+            Model=model_,
+            Func=client.beta.messages.stream,
+            AFunc=aclient.beta.messages.stream,
+            Arg_Names=call_arg_names,
+            Token_Window=model_.Token_Window,
+            Token_Limit_Completion=model_.Token_Limit_Completion,
+            Client=client,
+        )
+
+    @delayedretry(
+        rethrow_final_error=True,
+        max_attempts=LLM_DEFAULT_MAX_RETRIES,
+        include_errors=[
+            RateLimitErrorAnthropic,
+        ],
+    )
+    def _call(self, *args, **kwargs):
+        with self.Func(*args, **kwargs) as stream:
+            deque(stream.text_stream, maxlen=0)
+            return stream.get_final_message()
+
+    @delayedretry(
+        rethrow_final_error=True,
+        max_attempts=LLM_DEFAULT_MAX_RETRIES,
+        include_errors=[
+            RateLimitErrorAnthropic,
+        ],
+    )
+    async def _acall(self, *args, **kwargs):
+        with self.AFunc(*args, **kwargs) as stream:
+            async for _ in stream.text_stream:
+                pass
+            return await stream.get_final_message()
 
 
 # def tokenizer(messagelist):
