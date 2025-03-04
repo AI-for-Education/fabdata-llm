@@ -27,10 +27,11 @@ from ..decorators import delayedretry
 class ClaudeCaller(LLMCaller):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     Client: anthropic._base_client.BaseClient
+    AClient: anthropic._base_client.BaseClient
 
     def __init__(self, model: str = "claude-3-5-sonnet-latest"):
         Modtype = LLMModelType.get_type(model)
-        if Modtype not in [AnthropicModelType]:
+        if Modtype not in [AnthropicModelType, AnthropicStreamingModelType]:
             raise ValueError(f"{model} is not supported")
 
         model_: LLMModelType = Modtype(Name=model)
@@ -52,6 +53,7 @@ class ClaudeCaller(LLMCaller):
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
             Client=client,
+            AClient=aclient,
         )
 
     def format_message(self, message: LLMMessage):
@@ -218,31 +220,10 @@ class ClaudeCaller(LLMCaller):
 
 class ClaudeStreamingCaller(ClaudeCaller):
     def __init__(self, model: str = "claude-3-5-sonnet-latest"):
-        Modtype = LLMModelType.get_type(model)
-        if Modtype not in [AnthropicStreamingModelType]:
-            raise ValueError(f"{model} is not supported")
+        super().__init__(model)
 
-        model_: LLMModelType = Modtype(Name=model)
-        client = Anthropic(**model_.Client_Args)
-        aclient = AsyncAnthropic(**model_.Client_Args)
-
-        call_arg_names = LLMCallArgNames(
-            Model="model",
-            Messages="messages",
-            Max_Tokens=model_.Max_Token_Arg_Name,
-            Response_Schema="tools",
-        )
-
-        LLMCaller.__init__(
-            self,
-            Model=model_,
-            Func=client.beta.messages.stream,
-            AFunc=aclient.beta.messages.stream,
-            Arg_Names=call_arg_names,
-            Token_Window=model_.Token_Window,
-            Token_Limit_Completion=model_.Token_Limit_Completion,
-            Client=client,
-        )
+        self.Func = self.Client.beta.messages.stream
+        self.AFunc = self.AClient.beta.messages.stream
 
     @delayedretry(
         rethrow_final_error=True,
