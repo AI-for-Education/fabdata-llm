@@ -26,7 +26,12 @@ dependencies = [
     "tiktoken == 0.8.*",
     "google-auth == 2.32.*",
     "boto3 >=1.35.0,<1.36",
-    "aioboto3 >=13.2.0,<13.3"
+    "aioboto3 >=13.2.0,<13.3",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
 ]
 
 
