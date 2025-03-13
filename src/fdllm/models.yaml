@@ -100,6 +100,7 @@ OpenAI:
       Vision: True
 
 OpenAI_O3_Family:
+  Api_Interface: OpenAI
   Token_Window: 200000
   Token_Limit_Completion: 100000
   Tool_Use: True
