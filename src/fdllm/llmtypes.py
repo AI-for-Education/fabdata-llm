@@ -76,6 +76,7 @@ class LLMModelType(BaseModel):
     def model_types(cls) -> Dict[str, Type["LLMModelType"]]:
         return {
             "OpenAI": OpenAIModelType,
+            "OpenAICompletions": OpenAICompletionsModelType,
             "AzureOpenAI": AzureOpenAIModelType,
             "AzureMistralAI": AzureMistralAIModelType,
             "Anthropic": AnthropicModelType,
@@ -95,7 +96,7 @@ class LLMModelType(BaseModel):
         MODEL_TYPES = cls.model_types()
         if models[name]["Api_Interface"] not in MODEL_TYPES:
             raise ValueError(
-                "Unknown api_interface setting, check models.yaml config file"
+                f"Unknown api_interface setting {models[name]['Api_Interface']}, check models.yaml config file"
             )
         else:
             return MODEL_TYPES[models[name]["Api_Interface"]]
@@ -113,6 +114,11 @@ class LLMModelType(BaseModel):
 
 class OpenAIModelType(LLMModelType):
     Api_Key_Env_Var: str = "OPENAI_API_KEY"
+
+
+class OpenAICompletionsModelType(LLMModelType):
+    Api_Key_Env_Var: str = "OPENAI_API_KEY"
+    Max_Token_Arg_Name: str = "max_tokens"
 
 
 class AzureOpenAIModelType(LLMModelType):

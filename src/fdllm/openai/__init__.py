@@ -1,1 +1,1 @@
-from .caller import OpenAICaller
+from .caller import OpenAICaller, OpenAICompletionsCaller
