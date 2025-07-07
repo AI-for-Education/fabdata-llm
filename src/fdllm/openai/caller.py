@@ -12,7 +12,7 @@ from google.auth import default
 from google.auth.transport import requests
 from pydantic import BaseModel
 
-from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2
+from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2, tokenize_completions_messages
 from ..sysutils import deepmerge_dicts
 from ..llmtypes import (
     LLMCaller,
@@ -311,3 +311,6 @@ class OpenAICompletionsCaller(OpenAICaller):
         kwargs.pop('tool_choice', None)
         
         return kwargs
+
+    def tokenize(self, messagelist: List[LLMMessage]):
+        return tokenize_completions_messages(self.format_messagelist(messagelist))[0]
