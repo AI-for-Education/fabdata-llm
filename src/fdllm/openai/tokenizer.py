@@ -41,4 +41,4 @@ def tokenize_completions_messages(messages, model="davinci-002"):
     except KeyError:
         encoding = tiktoken.get_encoding("gpt2")
 
-    return len(encoding.encode(messages)), None
+    return encoding.encode(messages), None
