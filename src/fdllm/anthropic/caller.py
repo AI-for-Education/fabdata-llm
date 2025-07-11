@@ -225,30 +225,40 @@ class ClaudeStreamingCaller(ClaudeCaller):
         self.Func = self.Client.beta.messages.stream
         self.AFunc = self.AClient.beta.messages.stream
 
-    @delayedretry(
-        rethrow_final_error=True,
-        max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[
-            RateLimitErrorAnthropic,
-        ],
-    )
     def _call(self, *args, **kwargs):
-        with self.Func(*args, **kwargs) as stream:
-            deque(stream.text_stream, maxlen=0)
-            return stream.get_final_message()
+        # Apply delayedretry with logger at runtime
+        @delayedretry(
+            rethrow_final_error=True,
+            max_attempts=LLM_DEFAULT_MAX_RETRIES,
+            include_errors=[
+                RateLimitErrorAnthropic,
+            ],
+            logger=self.logger,
+        )
+        def _call_with_retry(*args, **kwargs):
+            with self.Func(*args, **kwargs) as stream:
+                deque(stream.text_stream, maxlen=0)
+                return stream.get_final_message()
+        
+        return _call_with_retry(*args, **kwargs)
 
-    @delayedretry(
-        rethrow_final_error=True,
-        max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[
-            RateLimitErrorAnthropic,
-        ],
-    )
     async def _acall(self, *args, **kwargs):
-        with self.AFunc(*args, **kwargs) as stream:
-            async for _ in stream.text_stream:
-                pass
-            return await stream.get_final_message()
+        # Apply delayedretry with logger at runtime
+        @delayedretry(
+            rethrow_final_error=True,
+            max_attempts=LLM_DEFAULT_MAX_RETRIES,
+            include_errors=[
+                RateLimitErrorAnthropic,
+            ],
+            logger=self.logger,
+        )
+        async def _acall_with_retry(*args, **kwargs):
+            with self.AFunc(*args, **kwargs) as stream:
+                async for _ in stream.text_stream:
+                    pass
+                return await stream.get_final_message()
+        
+        return await _acall_with_retry(*args, **kwargs)
 
 
 # def tokenizer(messagelist):

@@ -12,6 +12,7 @@ from typing import (
     ClassVar,
 )
 import datetime
+import logging
 from abc import ABC, abstractmethod
 import os
 from dataclasses import field
@@ -31,6 +32,7 @@ from pydantic import ConfigDict, BaseModel, Field
 from PIL import Image, ImageFile
 
 from .decorators import delayedretry
+from .logging_utils import get_logger, log_call_start, log_call_completion
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 from .sysutils import load_models, deepmerge_dicts, get_google_token
@@ -267,6 +269,11 @@ class LLMCaller(ABC, BaseModel):
     Token_Limit_Completion: Optional[int] = None
     Defaults: Dict = Field(default_factory=dict)
     Arg_Names: Optional[LLMCallArgNames] = None
+    
+    @property
+    def logger(self) -> logging.Logger:
+        """Get logger instance for this caller."""
+        return get_logger(f"caller.{self.Model.Name or 'unknown'}")
 
     @abstractmethod
     def format_message(self, message: LLMMessage):
@@ -309,8 +316,24 @@ class LLMCaller(ABC, BaseModel):
         response_schema: Optional[BaseModel] = None,
         **kwargs,
     ):
-        kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-        return self.format_output(self._call(**kwargs), response_schema=response_schema)
+        # Ensure messages is a list for logging
+        msg_list = messages if isinstance(messages, list) else [messages]
+        
+        # Log call start
+        start_time = log_call_start(self.logger, self.Model.Name, msg_list, "sync")
+        
+        try:
+            kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+            response = self._call(**kwargs)
+            formatted_output = self.format_output(response, response_schema=response_schema)
+            
+            # Log successful completion
+            log_call_completion(self.logger, self.Model.Name, start_time, response)
+            return formatted_output
+        except Exception as e:
+            # Log failed completion
+            log_call_completion(self.logger, self.Model.Name, start_time, error=e)
+            raise
 
     async def acall(
         self,
@@ -319,10 +342,24 @@ class LLMCaller(ABC, BaseModel):
         response_schema: Optional[BaseModel] = None,
         **kwargs,
     ):
-        kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-        return self.format_output(
-            await self._acall(**kwargs), response_schema=response_schema
-        )
+        # Ensure messages is a list for logging
+        msg_list = messages if isinstance(messages, list) else [messages]
+        
+        # Log call start
+        start_time = log_call_start(self.logger, self.Model.Name, msg_list, "async")
+        
+        try:
+            kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+            response = await self._acall(**kwargs)
+            formatted_output = self.format_output(response, response_schema=response_schema)
+            
+            # Log successful completion
+            log_call_completion(self.logger, self.Model.Name, start_time, response)
+            return formatted_output
+        except Exception as e:
+            # Log failed completion
+            log_call_completion(self.logger, self.Model.Name, start_time, error=e)
+            raise
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         if isinstance(messages, LLMMessage):
@@ -342,31 +379,41 @@ class LLMCaller(ABC, BaseModel):
                 kwargs[self.Arg_Names.Response_Schema] = response_schema
         return {**self.Model.Call_Args, **self.Defaults, **kwargs}
 
-    @delayedretry(
-        rethrow_final_error=True,
-        max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[
-            RateLimitErrorOpenAI,
-            RateLimitErrorAnthropic,
-            APIConnectionError,
-            ServerError,
-        ],
-    )
     def _call(self, *args, **kwargs):
-        return self.Func(*args, **kwargs)
+        # Apply delayedretry with logger at runtime
+        @delayedretry(
+            rethrow_final_error=True,
+            max_attempts=LLM_DEFAULT_MAX_RETRIES,
+            include_errors=[
+                RateLimitErrorOpenAI,
+                RateLimitErrorAnthropic,
+                APIConnectionError,
+                ServerError,
+            ],
+            logger=self.logger,
+        )
+        def _call_with_retry(*args, **kwargs):
+            return self.Func(*args, **kwargs)
+        
+        return _call_with_retry(*args, **kwargs)
 
-    @delayedretry(
-        rethrow_final_error=True,
-        max_attempts=LLM_DEFAULT_MAX_RETRIES,
-        include_errors=[
-            RateLimitErrorOpenAI,
-            RateLimitErrorAnthropic,
-            APIConnectionError,
-            ServerError,
-        ],
-    )
     async def _acall(self, *args, **kwargs):
-        return await self.AFunc(*args, **kwargs)
+        # Apply delayedretry with logger at runtime
+        @delayedretry(
+            rethrow_final_error=True,
+            max_attempts=LLM_DEFAULT_MAX_RETRIES,
+            include_errors=[
+                RateLimitErrorOpenAI,
+                RateLimitErrorAnthropic,
+                APIConnectionError,
+                ServerError,
+            ],
+            logger=self.logger,
+        )
+        async def _acall_with_retry(*args, **kwargs):
+            return await self.AFunc(*args, **kwargs)
+        
+        return await _acall_with_retry(*args, **kwargs)
 
 
 class LiteralCaller(LLMCaller):
