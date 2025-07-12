@@ -33,6 +33,17 @@ from PIL import Image, ImageFile
 
 from .decorators import delayedretry
 from .logging_utils import get_logger, log_call_start, log_call_completion
+
+# Tenacity imports for superior retry functionality
+from tenacity import (
+    retry, 
+    stop_after_attempt, 
+    wait_exponential, 
+    retry_if_exception_type,
+    before_log,
+    after_log, 
+    before_sleep_log
+)
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
 from .sysutils import load_models, deepmerge_dicts, get_google_token
@@ -270,10 +281,61 @@ class LLMCaller(ABC, BaseModel):
     Defaults: Dict = Field(default_factory=dict)
     Arg_Names: Optional[LLMCallArgNames] = None
     
+    # Thread-safe decorated methods created once during initialization
+    _sync_call_with_retry: Optional[Callable] = None
+    _async_call_with_retry: Optional[Callable] = None
+    
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize decorated retry methods after model creation."""
+        super().model_post_init(__context) if hasattr(super(), 'model_post_init') else None
+        self._create_retry_methods()
+    
     @property
     def logger(self) -> logging.Logger:
         """Get logger instance for this caller."""
         return get_logger(f"caller.{self.Model.Name or 'unknown'}")
+    
+    def _create_retry_methods(self):
+        """Create Tenacity-based retry methods with superior logging."""
+        
+        # Sync version with Tenacity
+        @retry(
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception_type((
+                RateLimitErrorOpenAI,
+                RateLimitErrorAnthropic,
+                APIConnectionError,
+                ServerError,
+            )),
+            before=before_log(self.logger, logging.DEBUG),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
+            after=after_log(self.logger, logging.DEBUG),
+            reraise=True
+        )
+        def sync_retry_wrapper(*args, **kwargs):
+            return self.Func(*args, **kwargs)
+        
+        # Async version with Tenacity  
+        @retry(
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception_type((
+                RateLimitErrorOpenAI,
+                RateLimitErrorAnthropic,
+                APIConnectionError,
+                ServerError,
+            )),
+            before=before_log(self.logger, logging.DEBUG),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
+            after=after_log(self.logger, logging.DEBUG),
+            reraise=True
+        )
+        async def async_retry_wrapper(*args, **kwargs):
+            return await self.AFunc(*args, **kwargs)
+        
+        self._sync_call_with_retry = sync_retry_wrapper
+        self._async_call_with_retry = async_retry_wrapper
 
     @abstractmethod
     def format_message(self, message: LLMMessage):
@@ -380,40 +442,12 @@ class LLMCaller(ABC, BaseModel):
         return {**self.Model.Call_Args, **self.Defaults, **kwargs}
 
     def _call(self, *args, **kwargs):
-        # Apply delayedretry with logger at runtime
-        @delayedretry(
-            rethrow_final_error=True,
-            max_attempts=LLM_DEFAULT_MAX_RETRIES,
-            include_errors=[
-                RateLimitErrorOpenAI,
-                RateLimitErrorAnthropic,
-                APIConnectionError,
-                ServerError,
-            ],
-            logger=self.logger,
-        )
-        def _call_with_retry(*args, **kwargs):
-            return self.Func(*args, **kwargs)
-        
-        return _call_with_retry(*args, **kwargs)
+        """Thread-safe synchronous call with retry logic."""
+        return self._sync_call_with_retry(*args, **kwargs)
 
     async def _acall(self, *args, **kwargs):
-        # Apply delayedretry with logger at runtime
-        @delayedretry(
-            rethrow_final_error=True,
-            max_attempts=LLM_DEFAULT_MAX_RETRIES,
-            include_errors=[
-                RateLimitErrorOpenAI,
-                RateLimitErrorAnthropic,
-                APIConnectionError,
-                ServerError,
-            ],
-            logger=self.logger,
-        )
-        async def _acall_with_retry(*args, **kwargs):
-            return await self.AFunc(*args, **kwargs)
-        
-        return await _acall_with_retry(*args, **kwargs)
+        """Thread-safe asynchronous call with retry logic."""
+        return await self._async_call_with_retry(*args, **kwargs)
 
 
 class LiteralCaller(LLMCaller):

@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import List, Optional
 from types import GeneratorType
 from collections import deque
@@ -22,6 +23,15 @@ from ..llmtypes import (
 )
 from ..tooluse import Tool
 from ..decorators import delayedretry
+from tenacity import (
+    retry, 
+    stop_after_attempt, 
+    wait_exponential, 
+    retry_if_exception_type,
+    before_log,
+    after_log, 
+    before_sleep_log
+)
 
 
 class ClaudeCaller(LLMCaller):
@@ -224,41 +234,47 @@ class ClaudeStreamingCaller(ClaudeCaller):
 
         self.Func = self.Client.beta.messages.stream
         self.AFunc = self.AClient.beta.messages.stream
-
-    def _call(self, *args, **kwargs):
-        # Apply delayedretry with logger at runtime
-        @delayedretry(
-            rethrow_final_error=True,
-            max_attempts=LLM_DEFAULT_MAX_RETRIES,
-            include_errors=[
-                RateLimitErrorAnthropic,
-            ],
-            logger=self.logger,
+        
+        # Override retry methods with streaming-specific implementations
+        self._create_streaming_retry_methods()
+    
+    def _create_streaming_retry_methods(self):
+        """Create streaming-specific Tenacity-based retry methods."""
+        
+        # Sync streaming version with Tenacity
+        @retry(
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception_type((RateLimitErrorAnthropic,)),
+            before=before_log(self.logger, logging.DEBUG),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
+            after=after_log(self.logger, logging.DEBUG),
+            reraise=True
         )
-        def _call_with_retry(*args, **kwargs):
+        def sync_streaming_retry(*args, **kwargs):
             with self.Func(*args, **kwargs) as stream:
                 deque(stream.text_stream, maxlen=0)
                 return stream.get_final_message()
         
-        return _call_with_retry(*args, **kwargs)
-
-    async def _acall(self, *args, **kwargs):
-        # Apply delayedretry with logger at runtime
-        @delayedretry(
-            rethrow_final_error=True,
-            max_attempts=LLM_DEFAULT_MAX_RETRIES,
-            include_errors=[
-                RateLimitErrorAnthropic,
-            ],
-            logger=self.logger,
+        # Async streaming version with Tenacity
+        @retry(
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception_type((RateLimitErrorAnthropic,)),
+            before=before_log(self.logger, logging.DEBUG),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
+            after=after_log(self.logger, logging.DEBUG),
+            reraise=True
         )
-        async def _acall_with_retry(*args, **kwargs):
+        async def async_streaming_retry(*args, **kwargs):
             with self.AFunc(*args, **kwargs) as stream:
                 async for _ in stream.text_stream:
                     pass
                 return await stream.get_final_message()
         
-        return await _acall_with_retry(*args, **kwargs)
+        # Override the base class retry methods with streaming versions
+        self._sync_call_with_retry = sync_streaming_retry
+        self._async_call_with_retry = async_streaming_retry
 
 
 # def tokenizer(messagelist):
