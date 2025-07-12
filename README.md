@@ -283,3 +283,66 @@ To avoid storing API keys in config files, you can also have multiple keys store
 ### Usage
 
 The [sandbox](./sandbox) folder contains examples of different use cases.
+
+### Logging
+
+FabData-LLM provides comprehensive logging for API calls and retry behavior. The library uses [Tenacity](https://tenacity.readthedocs.io/) for retry logic. By default, the library operates silently, but you can enable detailed logging for debugging and monitoring.
+
+#### Basic Logging Setup
+
+```python
+import logging
+from fdllm import get_caller
+
+# Enable INFO level logging for fdllm only
+logging.basicConfig(level=logging.WARNING)  # Keep other libraries quiet
+logging.getLogger("fdllm").setLevel(logging.INFO)
+
+caller = get_caller("gpt-4o-mini")
+response = caller.call("Hello")  # Shows call completion info
+```
+
+#### Detailed Retry Logging
+
+To see detailed retry behavior (failures, wait times, attempts):
+
+```python
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Enable DEBUG logging for detailed retry information
+logging.getLogger("fdllm").setLevel(logging.DEBUG)
+
+caller = get_caller("claude-3-5-sonnet")
+# Now you'll see detailed logs for each attempt, including:
+# - Call starts and completions
+# - Retry attempts with error details
+# - Wait times and attempt numbers
+```
+
+#### Per-Model Logging Control
+
+You can control logging granularity for different models:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.WARNING)
+
+# Different log levels for different models
+logging.getLogger("fdllm.caller.gpt-4o-mini").setLevel(logging.INFO)
+logging.getLogger("fdllm.caller.claude-3-5-sonnet").setLevel(logging.DEBUG)
+
+# Only Claude will show detailed retry logs, GPT will show basic info
+```
+
+#### Log Levels
+
+- **DEBUG**: Detailed call information, retry attempts, timing
+- **INFO**: Basic call completions and important events  
+- **WARNING**: Retry attempts and recoverable errors
+- **ERROR**: Failed calls and serious issues
