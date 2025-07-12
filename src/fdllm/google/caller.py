@@ -2,15 +2,13 @@ from types import GeneratorType
 from typing import Any, List, Optional
 
 from google import genai
-from pydantic import ConfigDict, BaseModel
+from pydantic import BaseModel
 
 from ..llmtypes import LLMCallArgNames, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
 from ..tooluse import Tool
 
 
 class GoogleGenAICaller(LLMCaller):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    Client: genai.client.Client
 
     def __init__(self, model: str = "gemini-2.0-flash-exp"):
         Modtype = LLMModelType.get_type(model)

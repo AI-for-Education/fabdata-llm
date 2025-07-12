@@ -16,6 +16,8 @@ from .llmtypes import LLMMessage, LLMCaller, LLMImage
 
 
 class ChatController(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+    
     Caller: LLMCaller
     History: List[LLMMessage] = Field(default_factory=list)
     Sys_Msg: Dict[Literal[0, -1, -2], str] = Field(default_factory=dict)
@@ -218,6 +220,8 @@ class ChatController(BaseModel):
 
 
 class ChatPlugin(ABC, BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+    
     Caller: LLMCaller
     Controller: Optional[ChatController] = None
     Sys_Msg: Optional[str] = None

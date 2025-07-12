@@ -272,22 +272,27 @@ class LLMCallArgNames:
     Response_Schema: Optional[str] = None
 
 
-class LLMCaller(ABC, BaseModel):
-    Model: LLMModelType
-    Func: Callable[..., Any]
-    AFunc: Callable[..., Awaitable[Any]]
-    Token_Window: int
-    Token_Limit_Completion: Optional[int] = None
-    Defaults: Dict = Field(default_factory=dict)
-    Arg_Names: Optional[LLMCallArgNames] = None
-    
-    # Thread-safe decorated methods created once during initialization
-    _sync_call_with_retry: Optional[Callable] = None
-    _async_call_with_retry: Optional[Callable] = None
-    
-    def model_post_init(self, __context: Any) -> None:
-        """Initialize decorated retry methods after model creation."""
-        super().model_post_init(__context) if hasattr(super(), 'model_post_init') else None
+class LLMCaller(ABC):
+    def __init__(self, *, Model: LLMModelType, Func: Callable[..., Any], AFunc: Callable[..., Awaitable[Any]], 
+                 Token_Window: int, Token_Limit_Completion: Optional[int] = None, 
+                 Defaults: Optional[Dict] = None, Arg_Names: Optional[LLMCallArgNames] = None, **kwargs):
+        self.Model: LLMModelType = Model
+        self.Func: Callable[..., Any] = Func
+        self.AFunc: Callable[..., Awaitable[Any]] = AFunc
+        self.Token_Window: int = Token_Window
+        self.Token_Limit_Completion: Optional[int] = Token_Limit_Completion
+        self.Defaults: Dict = Defaults or {}
+        self.Arg_Names: Optional[LLMCallArgNames] = Arg_Names
+        
+        # Thread-safe decorated methods created once during initialization
+        self._sync_call_with_retry: Optional[Callable] = None
+        self._async_call_with_retry: Optional[Callable] = None
+        
+        # Handle additional attributes (like Client, AClient for some providers)
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+            
+        # Initialize retry methods after all attributes are set
         self._create_retry_methods()
     
     @property
@@ -452,8 +457,16 @@ class LLMCaller(ABC, BaseModel):
 
 class LiteralCaller(LLMCaller):
     def __init__(self, text: str):
+        # Create a minimal model type for literal caller
+        class LiteralModelType:
+            Name = "literal"
+            Api_Interface = "literal"
+            Token_Window = 0
+        
+        model_type = LiteralModelType()
+        
         super().__init__(
-            Model=LLMModelType(Name=None),
+            Model=model_type,
             Func=lambda: text,
             AFunc=self._literalafunc(text),
             Token_Window=0,
