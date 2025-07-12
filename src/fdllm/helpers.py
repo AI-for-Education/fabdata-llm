@@ -1,13 +1,14 @@
 from .anthropic import ClaudeCaller, ClaudeStreamingCaller
 from .llmtypes import LLMCaller
 from .mistralai import MistralCaller
-from .openai import OpenAICaller
+from .openai import OpenAICaller, OpenAICompletionsCaller
 from .google import GoogleGenAICaller
 from .bedrock import BedrockCaller
 from .sysutils import load_models
 
 API_CALLERS = {
     "OpenAI": OpenAICaller,
+    "OpenAICompletions": OpenAICompletionsCaller,
     "AzureOpenAI": OpenAICaller,
     "AzureMistralAI": MistralCaller,
     "Anthropic": ClaudeCaller,
