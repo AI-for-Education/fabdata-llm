@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from itertools import product
 from typing import List
 
-from pydantic import PrivateAttr, Field
+# Removed pydantic imports - no longer needed for ChatPlugin/ChatController
 
 from fdllm import get_caller
 from fdllm.chat import ChatController
@@ -52,7 +52,8 @@ class TESTTOOL2(Tool):
 
 
 class TESTTOOLPLUGIN(ToolUsePlugin):
-    Tools: List[Tool] = Field(default_factory=lambda: [TESTTOOL1(), TESTTOOL2()])
+    def __init__(self, **kwargs):
+        super().__init__(Tools=[TESTTOOL1(), TESTTOOL2()], **kwargs)
 
 
 TEST_PROMPT_TEXT = "This is a user test"
@@ -104,7 +105,7 @@ TEST_CALLERS = ["gpt-3.5-turbo-1106", "claude-3-haiku-20240307"]
 def test_toolcall(toolstr: str, caller: str, test_over):
     validstr = f"valid_{toolstr.split('_')[-1]}"
     caller = get_caller(caller)
-    plugin = TESTTOOLPLUGIN()
+    plugin = TESTTOOLPLUGIN(Caller=caller)
     if toolstr.startswith(("missing", "extra")):
         nreps = plugin._max_tool_attempt + int(test_over)
     else:

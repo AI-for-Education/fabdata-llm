@@ -5,7 +5,7 @@ from itertools import product
 from typing import List
 from pathlib import Path
 
-from pydantic import PrivateAttr
+# Removed pydantic import - no longer needed
 
 from fdllm.chat import ChatController, ChatPlugin
 from fdllm import OpenAICaller, ClaudeCaller, GoogleGenAICaller
@@ -19,8 +19,9 @@ register_models(Path.home() / ".fdllm/custom_models.yaml")
 TEST_PLUGIN_SYSMSG = {0: "A", -1: "B", -2: "C"}
 
 class TESTPLUGIN(ChatPlugin):
-    Restore_Attrs: List[str] = ["Sys_Msg"]
-    _history: List[LLMMessage] = PrivateAttr()
+    def __init__(self, **kwargs):
+        super().__init__(Restore_Attrs=["Sys_Msg"], **kwargs)
+        self._history: List[LLMMessage] = []
 
     def pre_chat(self, prompt: str, *args, **kwargs):
         self.Controller.Sys_Msg = TEST_PLUGIN_SYSMSG

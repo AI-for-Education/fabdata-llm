@@ -10,7 +10,7 @@ from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
 from anthropic import RateLimitError as RateLimitErrorAnthropic
 from ..constants import LLM_DEFAULT_MAX_RETRIES
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from ..llmtypes import (
     LLMCaller,
@@ -35,9 +35,6 @@ from tenacity import (
 
 
 class ClaudeCaller(LLMCaller):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    Client: anthropic._base_client.BaseClient
-    AClient: anthropic._base_client.BaseClient
 
     def __init__(self, model: str = "claude-3-5-sonnet-latest"):
         Modtype = LLMModelType.get_type(model)
