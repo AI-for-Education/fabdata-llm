@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import copy
 
 from PIL import Image
-from pydantic import BaseModel, Field, PrivateAttr
+# Removed pydantic imports - no longer needed for ChatController and ChatPlugin
 
 from .constants import (
     LLM_EMPTY_QUESTION,
@@ -15,15 +15,17 @@ from .constants import (
 from .llmtypes import LLMMessage, LLMCaller, LLMImage
 
 
-class ChatController(BaseModel):
-    model_config = {"arbitrary_types_allowed": True}
-    
-    Caller: LLMCaller
-    History: List[LLMMessage] = Field(default_factory=list)
-    Sys_Msg: Dict[Literal[0, -1, -2], str] = Field(default_factory=dict)
-    Sys_Msg_Confirmation: Dict[Literal[0, -1, -2], str] = Field(default_factory=dict)
-    Keep_History: bool = True
-    _plugins: List[ChatPlugin] = PrivateAttr(default_factory=list)
+class ChatController:
+    def __init__(self, *, Caller: LLMCaller, History: Optional[List[LLMMessage]] = None,
+                 Sys_Msg: Optional[Dict[Literal[0, -1, -2], str]] = None,
+                 Sys_Msg_Confirmation: Optional[Dict[Literal[0, -1, -2], str]] = None,
+                 Keep_History: bool = True):
+        self.Caller: LLMCaller = Caller
+        self.History: List[LLMMessage] = History or []
+        self.Sys_Msg: Dict[Literal[0, -1, -2], str] = Sys_Msg or {}
+        self.Sys_Msg_Confirmation: Dict[Literal[0, -1, -2], str] = Sys_Msg_Confirmation or {}
+        self.Keep_History: bool = Keep_History
+        self._plugins: List[ChatPlugin] = []
 
     @property
     def recent_history(self):
@@ -219,14 +221,14 @@ class ChatController(BaseModel):
         return new_message, latest_convo
 
 
-class ChatPlugin(ABC, BaseModel):
-    model_config = {"arbitrary_types_allowed": True}
-    
-    Caller: LLMCaller
-    Controller: Optional[ChatController] = None
-    Sys_Msg: Optional[str] = None
-    Restore_Attrs: List[str] = Field(default_factory=list)
-    _restore_vals: Dict[str, Any] = PrivateAttr(default_factory=dict)
+class ChatPlugin(ABC):
+    def __init__(self, *, Caller: LLMCaller, Controller: Optional[ChatController] = None,
+                 Sys_Msg: Optional[str] = None, Restore_Attrs: Optional[List[str]] = None):
+        self.Caller: LLMCaller = Caller
+        self.Controller: Optional[ChatController] = Controller
+        self.Sys_Msg: Optional[str] = Sys_Msg
+        self.Restore_Attrs: List[str] = Restore_Attrs or []
+        self._restore_vals: Dict[str, Any] = {}
 
     @abstractmethod
     def register(self):
@@ -308,7 +310,7 @@ class ChatPlugin(ABC, BaseModel):
         return obj, parent, attr
 
 
-ChatController.model_rebuild()
+# Removed ChatController.model_rebuild() - no longer needed without Pydantic
 
 
 class LLMError(Exception):

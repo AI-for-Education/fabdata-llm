@@ -4,7 +4,7 @@ from typing import Optional, List, Dict
 from collections import Counter
 import json
 
-from pydantic import Field
+# Removed pydantic import - no longer needed
 from fdllm import get_caller
 from fdllm.chat import ChatController, ChatPlugin
 from fdllm.llmtypes import LLMMessage, LLMCaller
@@ -27,21 +27,11 @@ class CopycatPlugin(ChatPlugin):
     in self.Controller
     """
 
-    ### base fields from ChatPlugin
-    # This is a separate Caller that the plugin can use for whatever reason
-    # Need to be declared like this because in parent class it is not optional.
-    # That fact will likely change in future.
-    Caller: Optional[LLMCaller] = None
-    # These attributes of ChatController will be restored to their previous
-    # state after the plugin finishes
-    Restore_Attrs: List[str] = ["Sys_Msg"]
-
-    ### unique fields
-    word_count: Dict[str, Counter] = Field(
-        default_factory=lambda: {"user": Counter(), "assistant": Counter()}
-    )
-    n: int = 5
-    verbose: bool = False
+    def __init__(self, *, Caller: LLMCaller, n: int = 5, verbose: bool = False, **kwargs):
+        super().__init__(Caller=Caller, Restore_Attrs=["Sys_Msg"], **kwargs)
+        self.word_count: Dict[str, Counter] = {"user": Counter(), "assistant": Counter()}
+        self.n: int = n
+        self.verbose: bool = verbose
 
     #####################
     #### base methods from ChatPlugin ABC
@@ -128,9 +118,10 @@ class CopycatPlugin(ChatPlugin):
 
 
 # %%
-chat = ChatController(Caller=get_caller("gpt-3.5-turbo"))
+caller = get_caller("gpt-3.5-turbo")
+chat = ChatController(Caller=caller)
 
-plugin = CopycatPlugin()
+plugin = CopycatPlugin(Caller=caller)
 
 chat.register_plugin(plugin)
 

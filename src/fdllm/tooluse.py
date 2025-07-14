@@ -100,10 +100,13 @@ class Tool(ABC, BaseModel):
 
 
 class ToolUsePlugin(ChatPlugin):
-    Caller: Optional[LLMCaller] = None
-    Tools: List[Tool]
-    _tool_attempt: int = 0
-    _max_tool_attempt: int = 5
+    def __init__(self, *, Tools: List[Tool], Caller: Optional[LLMCaller] = None,
+                 Controller: Optional['ChatController'] = None, Sys_Msg: Optional[str] = None,
+                 Restore_Attrs: Optional[List[str]] = None):
+        super().__init__(Caller=Caller, Controller=Controller, Sys_Msg=Sys_Msg, Restore_Attrs=Restore_Attrs)
+        self.Tools: List[Tool] = Tools
+        self._tool_attempt: int = 0
+        self._max_tool_attempt: int = 5
 
     def register(self):
         super().register()
