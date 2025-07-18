@@ -7,6 +7,9 @@ from fdllm.llmtypes import LLMMessage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.sysutils import register_models
 
+HERE = Path(__file__).resolve().parent
+TEST_ROOT = HERE.parent
+
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"
 TEST_MESSAGE = {
@@ -19,10 +22,10 @@ TEST_RESULT_OPENAI = SimpleNamespace(
         message=SimpleNamespace(content=TEST_MESSAGE_TEXT)
     )]
 )
-TEST_MODELS = ["gpt-3.5-turbo", "fabdata-openai-eastus2-gpt35"]
-TEST_VISION_MODELS = ["gpt-4-vision-preview"]
+TEST_MODELS = ["gpt-3.5-turbo", "gpt-4.1-mini"]
+TEST_VISION_MODELS = ["gpt-4.1"]
 
-register_models(Path.home() / ".fdllm/custom_models.yaml")
+register_models(TEST_ROOT / "custom_models_test.yaml")
 
 @pytest.mark.parametrize("model", TEST_MODELS)
 def test_init_openai(model):
