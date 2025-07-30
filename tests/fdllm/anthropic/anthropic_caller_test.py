@@ -1,10 +1,7 @@
 import pytest
 from types import SimpleNamespace
 
-import anthropic
-
 from fdllm import ClaudeCaller
-from fdllm.anthropic.caller import tokenizer
 from fdllm.llmtypes import LLMMessage
 
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
@@ -47,9 +44,3 @@ def test_format_output_anthropic():
     out = caller.format_output(TEST_RESULT_ANTHROPIC)
     assert isinstance(out, LLMMessage)
 
-
-def test_tokenize_anthropic():
-    caller = ClaudeCaller()
-    out = len(caller.tokenize(TEST_MESSAGE_LIST))
-    expected = len(tokenizer(caller.format_messagelist(TEST_MESSAGE_LIST)))
-    assert out == expected

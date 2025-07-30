@@ -9,8 +9,12 @@ import yaml
 from google.auth import default
 from google.auth.transport import requests
 
+from .logging_utils import get_logger
+
 HERE = Path(__file__).parent
 basemodelfile = HERE / "models.yaml"
+
+logger = get_logger("sysutils")
 
 
 def deepmerge_dicts(dict1, dict2, copy_out=True):
@@ -79,6 +83,7 @@ def list_models(full_info=False, base_only=False):
 
 
 def register_models(modelfile: Union[str, os.PathLike]):
+    logger.debug(f"Registering models from file: {Path(modelfile).as_posix()}")
     custom_models = _parse_model_config_file(modelfile)
     # latest file load overwrites previous
     clear_model_register()
@@ -86,6 +91,7 @@ def register_models(modelfile: Union[str, os.PathLike]):
 
 
 def clear_model_register():
+    logger.debug(f"Clearing model register")
     MODELS.clear()
 
 

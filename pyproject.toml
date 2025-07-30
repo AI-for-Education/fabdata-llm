@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fabdata-llm"
-version = "0.27.0"
+version = "0.28.0"
 requires-python = ">=3.10, <3.13"
 dependencies = [
     "pyyaml",
@@ -27,6 +27,7 @@ dependencies = [
     "google-auth == 2.32.*",
     "boto3 >=1.35.0,<1.36",
     "aioboto3 >=13.2.0,<13.3",
+    "tenacity>=9.1.0",
 ]
 
 [dependency-groups]
