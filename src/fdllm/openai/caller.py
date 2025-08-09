@@ -5,13 +5,37 @@ import os
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+import logging
+from collections import deque
 
-from openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
+from openai import (
+    OpenAI,
+    AsyncOpenAI,
+    AzureOpenAI,
+    AsyncAzureOpenAI,
+    RateLimitError as RateLimitErrorOpenAI,
+    APIConnectionError,
+)
 from openai.lib._parsing._completions import type_to_response_format_param
+from openai.types.chat.chat_completion import (
+    ChatCompletion,
+    Choice,
+    ChatCompletionMessage,
+)
 from google.auth import default
 from google.auth.transport import requests
 from pydantic import BaseModel
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_log,
+    after_log,
+    before_sleep_log,
+)
 
+from ..constants import LLM_DEFAULT_MAX_RETRIES
 from .tokenizer import (
     tokenize_chatgpt_messages,
     tokenize_chatgpt_messages_v2,
@@ -22,6 +46,7 @@ from ..llmtypes import (
     LLMCaller,
     LLMCallArgNames,
     OpenAIModelType,
+    OpenAIStreamingModelType,
     OpenAICompletionsModelType,
     VertexAIModelType,
     AzureOpenAIModelType,
@@ -37,7 +62,7 @@ class OpenAICaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         model_: LLMModelType = Modtype(Name=model)
 
-        if Modtype in [OpenAIModelType, VertexAIModelType]:
+        if Modtype in [OpenAIModelType, OpenAIStreamingModelType, VertexAIModelType]:
             client = OpenAI(**model_.Client_Args)
             aclient = AsyncOpenAI(**model_.Client_Args)
         elif Modtype in [AzureOpenAIModelType]:
@@ -331,3 +356,90 @@ class OpenAICompletionsCaller(OpenAICaller):
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenize_completions_messages(self.format_messagelist(messagelist))[0]
+
+
+class OpenAIStreamingCaller(OpenAICaller):
+    def __init__(self, model: str = "gpt-3.5-turbo"):
+        super().__init__(model)
+
+        self._stream_kwargs = {
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+
+        self._basefunc = self.Func
+        self.Func = self._streaming_func
+
+        self._baseafunc = self.AFunc
+        self.AFunc = self._streaming_afunc
+
+        # Override retry methods with streaming-specific implementations
+        self._create_streaming_retry_methods()
+
+    def _streaming_func(self, *args, **kwargs):
+        _kwargs = {**kwargs, **self._stream_kwargs}
+        return self._basefunc(*args, **_kwargs)
+
+    async def _streaming_afunc(self, *args, **kwargs):
+        _kwargs = {**kwargs, **self._stream_kwargs}
+        return await self._baseafunc(*args, **_kwargs)
+
+    @staticmethod
+    def _completion_from_stream(stream):
+        response_chunks = list(stream)
+        meta_chunk = response_chunks.pop(-1)
+        role_chunk = response_chunks.pop(0)
+        role = role_chunk.choices[0].delta.role
+        assert role == "assistant"
+        content = "".join(
+            [
+                text
+                for chunk in response_chunks
+                if (text := chunk.choices[0].delta.content) is not None
+            ]
+        )
+        message = ChatCompletionMessage(role=role, content=content)
+        finish_reason = response_chunks[-1].choices[0].finish_reason
+        choice = Choice(index=0, finish_reason=finish_reason, message=message)
+        
+        completion_kwargs = meta_chunk.model_dump()
+        
+        completion_kwargs["object"] = "chat.completion"
+        completion_kwargs["choices"] = [choice]
+        return ChatCompletion(**completion_kwargs)
+
+
+    def _create_streaming_retry_methods(self):
+        """Create streaming-specific Tenacity-based retry methods."""
+
+        # Sync streaming version with Tenacity
+        @retry(
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception_type((RateLimitErrorOpenAI,)),
+            before=before_log(self.logger, logging.DEBUG),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
+            after=after_log(self.logger, logging.DEBUG),
+            reraise=True,
+        )
+        def sync_streaming_retry(*args, **kwargs):
+            with self.Func(*args, **kwargs) as stream:
+                return self._completion_from_stream(stream)
+
+        # Async streaming version with Tenacity
+        @retry(
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception_type((RateLimitErrorOpenAI,)),
+            before=before_log(self.logger, logging.DEBUG),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
+            after=after_log(self.logger, logging.DEBUG),
+            reraise=True,
+        )
+        async def async_streaming_retry(*args, **kwargs):
+            with self.AFunc(*args, **kwargs) as stream:
+                return self._completion_from_stream(stream)
+
+        # Override the base class retry methods with streaming versions
+        self._sync_call_with_retry = sync_streaming_retry
+        self._async_call_with_retry = async_streaming_retry

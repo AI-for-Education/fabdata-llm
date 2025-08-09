@@ -89,6 +89,7 @@ class LLMModelType(BaseModel):
     def model_types(cls) -> Dict[str, Type["LLMModelType"]]:
         return {
             "OpenAI": OpenAIModelType,
+            "OpenAIStreaming": OpenAIStreamingModelType,
             "OpenAICompletions": OpenAICompletionsModelType,
             "AzureOpenAI": AzureOpenAIModelType,
             "AzureMistralAI": AzureMistralAIModelType,
@@ -128,6 +129,8 @@ class LLMModelType(BaseModel):
 class OpenAIModelType(LLMModelType):
     Api_Key_Env_Var: str = "OPENAI_API_KEY"
 
+class OpenAIStreamingModelType(LLMModelType):
+    Api_Key_Env_Var: str = "OPENAI_API_KEY"
 
 class OpenAICompletionsModelType(LLMModelType):
     Api_Key_Env_Var: str = "OPENAI_API_KEY"
