@@ -12,7 +12,11 @@ from google.auth import default
 from google.auth.transport import requests
 from pydantic import BaseModel
 
-from .tokenizer import tokenize_chatgpt_messages, tokenize_chatgpt_messages_v2, tokenize_completions_messages
+from .tokenizer import (
+    tokenize_chatgpt_messages,
+    tokenize_chatgpt_messages_v2,
+    tokenize_completions_messages,
+)
 from ..sysutils import deepmerge_dicts
 from ..llmtypes import (
     LLMCaller,
@@ -178,7 +182,13 @@ def _gpt_common_fmt_output(output):
     else:
         msg = output.choices[0].message
         if msg.content is not None:
-            return LLMMessage(Role="assistant", Message=msg.content)
+            return LLMMessage(
+                Role="assistant",
+                Message=msg.content,
+                TokensUsed=output.usage.total_tokens,
+                TokensUsedCompletion=output.usage.completion_tokens,
+                TokensUsedReasoning=output.usage.completion_tokens_details.reasoning_tokens,
+            )
         elif msg.tool_calls is not None:
             tcs = [
                 LLMToolCall(
@@ -195,7 +205,7 @@ def _gpt_common_fmt_output(output):
 
 class OpenAICompletionsCaller(OpenAICaller):
     """OpenAI Completions API caller that uses the legacy completions endpoint instead of chat completions."""
-    
+
     def __init__(self, model: str = "text-davinci-003"):
         # Get the model type first
         Modtype = LLMModelType.get_type(model)
@@ -266,29 +276,31 @@ class OpenAICompletionsCaller(OpenAICaller):
 
         if len(messagelist) > 1:
             raise ValueError("OpenAI Completions API only supports one message")
-        
+
         for message in messagelist:
             formatted_message = self.format_message(message)
             prompt_parts.append(formatted_message)
-        
+
         # Join all parts and add a final prompt for the assistant to continue
         prompt = "".join(prompt_parts)
-        
+
         # If the last message wasn't from the assistant, add a prompt for continuation
         # if messagelist and messagelist[-1].Role != "assistant":
         #     prompt += "Assistant: "
-        
+
         return prompt
 
-    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None) -> LLMMessage:
+    def format_output(
+        self, output: Any, response_schema: Optional[BaseModel] = None
+    ) -> LLMMessage:
         """Format the completions API output to LLMMessage format."""
         if isinstance(output, GeneratorType):
             return output
         else:
             # Completions API returns text in choices[0].text instead of choices[0].message.content
-            if hasattr(output, 'choices') and len(output.choices) > 0:
+            if hasattr(output, "choices") and len(output.choices) > 0:
                 choice = output.choices[0]
-                if hasattr(choice, 'text'):
+                if hasattr(choice, "text"):
                     return LLMMessage(Role="assistant", Message=choice.text)
                 else:
                     raise ValueError("Unexpected completions API response format")
@@ -302,14 +314,16 @@ class OpenAICompletionsCaller(OpenAICaller):
                 "Structured outputs (response_schema) are not supported in the OpenAI completions API. "
                 "Use the chat completions API instead."
             )
-        
+
         # Call parent method but it will use our overridden Arg_Names
-        kwargs = super()._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-        
+        kwargs = super()._proc_call_args(
+            messages, max_tokens, response_schema, **kwargs
+        )
+
         # Remove any chat-specific parameters that don't apply to completions
-        kwargs.pop('tools', None)
-        kwargs.pop('tool_choice', None)
-        
+        kwargs.pop("tools", None)
+        kwargs.pop("tool_choice", None)
+
         return kwargs
 
     def tokenize(self, messagelist: List[LLMMessage]):

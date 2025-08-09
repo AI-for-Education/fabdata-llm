@@ -176,6 +176,8 @@ class LLMMessage(BaseModel):
     Images: Optional[List[LLMImage]] = None
     ToolCalls: Optional[List[LLMToolCall]] = None
     TokensUsed: int = 0
+    TokensUsedCompletion: int = 0
+    TokensUsedReasoning: int = 0
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     def __eq__(self, __value: object) -> bool:
