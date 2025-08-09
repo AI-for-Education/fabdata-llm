@@ -386,20 +386,21 @@ class OpenAIStreamingCaller(OpenAICaller):
 
     @staticmethod
     def _completion_from_stream(stream):
-        response_chunks = list(stream)
-        meta_chunk = response_chunks.pop(-1)
-        role_chunk = response_chunks.pop(0)
+        role_chunk = next(stream)
         role = role_chunk.choices[0].delta.role
         assert role == "assistant"
-        content = "".join(
-            [
-                text
-                for chunk in response_chunks
-                if (text := chunk.choices[0].delta.content) is not None
-            ]
-        )
+        
+        content = ""
+        for chunk in stream:
+            text = chunk.choices[0].delta.content
+            if text is not None:
+                content += text
+            finish_reason = chunk.choices[0].finish_reason
+            if finish_reason is not None:
+                break
+        meta_chunk = next(stream)
+        
         message = ChatCompletionMessage(role=role, content=content)
-        finish_reason = response_chunks[-1].choices[0].finish_reason
         choice = Choice(index=0, finish_reason=finish_reason, message=message)
         
         completion_kwargs = meta_chunk.model_dump()
