@@ -180,14 +180,17 @@ def _gpt_common_fmt_output(output):
     if isinstance(output, GeneratorType):
         return output
     else:
+        token_count_kwargs = dict(
+            TokensUsed=output.usage.total_tokens,
+            TokensUsedCompletion=output.usage.completion_tokens,
+            TokensUsedReasoning=output.usage.completion_tokens_details.reasoning_tokens,
+        )
         msg = output.choices[0].message
         if msg.content is not None:
             return LLMMessage(
                 Role="assistant",
                 Message=msg.content,
-                TokensUsed=output.usage.total_tokens,
-                TokensUsedCompletion=output.usage.completion_tokens,
-                TokensUsedReasoning=output.usage.completion_tokens_details.reasoning_tokens,
+                **token_count_kwargs,
             )
         elif msg.tool_calls is not None:
             tcs = [
@@ -198,7 +201,7 @@ def _gpt_common_fmt_output(output):
                 )
                 for tc in msg.tool_calls
             ]
-            return LLMMessage(Role="assistant", ToolCalls=tcs)
+            return LLMMessage(Role="assistant", ToolCalls=tcs, **token_count_kwargs)
         else:
             raise ValueError("Output must be either content or tool call")
 
