@@ -180,10 +180,15 @@ def _gpt_common_fmt_output(output):
     if isinstance(output, GeneratorType):
         return output
     else:
+        ctd = output.usage.completion_tokens_details
+        if ctd is None:
+            reasoning_tokens = None
+        else:
+            reasoning_tokens = ctd.reasoning_tokens
         token_count_kwargs = dict(
             TokensUsed=output.usage.total_tokens,
             TokensUsedCompletion=output.usage.completion_tokens,
-            TokensUsedReasoning=output.usage.completion_tokens_details.reasoning_tokens,
+            TokensUsedReasoning=reasoning_tokens,
         )
         msg = output.choices[0].message
         if msg.content is not None:
