@@ -267,7 +267,7 @@ class ClaudeStreamingCaller(ClaudeCaller):
             reraise=True
         )
         async def async_streaming_retry(*args, **kwargs):
-            with self.AFunc(*args, **kwargs) as stream:
+            async with self.AFunc(*args, **kwargs) as stream:
                 async for _ in stream.text_stream:
                     pass
                 return await stream.get_final_message()
