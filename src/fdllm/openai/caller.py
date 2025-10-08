@@ -191,11 +191,13 @@ def _gpt_common_fmt_output(output):
             TokensUsedReasoning=reasoning_tokens,
         )
         msg = output.choices[0].message
+        logprobs = getattr(output.choices[0], "logprobs", None)
         if msg.content is not None:
             return LLMMessage(
                 Role="assistant",
                 Message=msg.content,
                 **token_count_kwargs,
+                LogProbs=logprobs,
             )
         elif msg.tool_calls is not None:
             tcs = [
@@ -206,7 +208,7 @@ def _gpt_common_fmt_output(output):
                 )
                 for tc in msg.tool_calls
             ]
-            return LLMMessage(Role="assistant", ToolCalls=tcs, **token_count_kwargs)
+            return LLMMessage(Role="assistant", ToolCalls=tcs, **token_count_kwargs, LogProbs=logprobs)
         else:
             raise ValueError("Output must be either content or tool call")
 

@@ -178,6 +178,7 @@ class LLMMessage(BaseModel):
     TokensUsed: Optional[int] = None
     TokensUsedCompletion: Optional[int] = None
     TokensUsedReasoning: Optional[int] = None
+    LogProbs: Optional[Any] = None
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     def __eq__(self, __value: object) -> bool:
