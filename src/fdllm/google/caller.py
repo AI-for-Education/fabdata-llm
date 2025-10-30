@@ -3,6 +3,11 @@ from typing import Any, List, Optional
 
 from google import genai
 from pydantic import ConfigDict, BaseModel
+from openai.types.chat.chat_completion import ChoiceLogprobs
+from openai.types.chat.chat_completion_token_logprob import (
+    TopLogprob,
+    ChatCompletionTokenLogprob,
+)
 
 from ..llmtypes import LLMCallArgNames, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
 from ..tooluse import Tool
@@ -138,6 +143,10 @@ class GoogleGenAICaller(LLMCaller):
         )
         # move parameters into config argument for genai client
         config = {"system_instruction": kwargs.pop("system", None)}
+        if "logprobs" in kwargs:
+            config["response_logprobs"] = kwargs.pop("logprobs")
+        if "top_logprobs" in kwargs:
+            config["logprobs"] = kwargs.pop("top_logprobs")
         for arg in [
             self.Arg_Names.Max_Tokens,
             "tools",
@@ -161,10 +170,32 @@ class GoogleGenAICaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
-            parts = output.candidates[0].content.parts
-            if parts[0].text is not None:
-                return LLMMessage(Role="assistant", Message=parts[0].text)
-            elif parts[0].function_call is not None:
+            parts = getattr(output.candidates[0].content, "parts")
+            logprobs_result = getattr(output.candidates[0], "logprobs_result")
+            if logprobs_result is not None:
+                logprobs = ChoiceLogprobs(
+                    content=[
+                        ChatCompletionTokenLogprob(
+                            token=chosen.token,
+                            logprob=chosen.log_probability,
+                            top_logprobs=[
+                                TopLogprob(
+                                    token=lpr_.token, logprob=lpr_.log_probability
+                                )
+                                for lpr_ in lpr.candidates
+                            ],
+                        )
+                        for chosen, lpr in zip(
+                            logprobs_result.chosen_candidates,
+                            logprobs_result.top_candidates,
+                        )
+                    ]
+                )
+            else:
+                logprobs = None
+            if parts is not None and getattr(parts[0], "text") is not None:
+                return LLMMessage(Role="assistant", Message=parts[0].text, LogProbs=logprobs)
+            elif parts is not None and getattr(parts[0], "function_call") is not None:
                 tcs = [
                     LLMToolCall(
                         ID=p.function_call.id,
@@ -172,9 +203,9 @@ class GoogleGenAICaller(LLMCaller):
                         Args=p.function_call.args,
                     )
                     for p in parts
-                    if p.function_call is not None
+                    if getattr(p, "function_call") is not None
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs)
+                return LLMMessage(Role="assistant", ToolCalls=tcs, LogProbs=logprobs)
             else:
                 raise ValueError("Output must be either content or tool call")
 
@@ -183,5 +214,6 @@ class GoogleGenAICaller(LLMCaller):
     # https://medium.com/google-cloud/counting-gemini-text-tokens-locally-with-the-vertex-ai-sdk-78979fea6244
     def count_tokens(self, messagelist: List[LLMMessage]):
         return self.Client.models.count_tokens(
-            model=self.Model.Api_Model_Name, contents=self.format_messagelist(messagelist)
+            model=self.Model.Api_Model_Name,
+            contents=self.format_messagelist(messagelist),
         ).total_tokens
