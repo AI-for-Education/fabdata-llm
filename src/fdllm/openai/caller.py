@@ -127,8 +127,13 @@ class OpenAICaller(LLMCaller):
                 out.append(outmsg)
         return out
 
-    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
-        return _gpt_common_fmt_output(output)
+    def format_output(
+        self,
+        output: Any,
+        response_schema: Optional[BaseModel] = None,
+        latency: Optional[float] = None,
+    ):
+        return _gpt_common_fmt_output(output, latency)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         if self.Model.Vision:
@@ -176,20 +181,24 @@ class OpenAICaller(LLMCaller):
         return kwargs
 
 
-def _gpt_common_fmt_output(output):
+def _gpt_common_fmt_output(output, latency):
     if isinstance(output, GeneratorType):
         return output
     else:
-        ctd = output.usage.completion_tokens_details
-        if ctd is None:
-            reasoning_tokens = None
+        usage = getattr(output, "usage",  None)
+        if usage is None:
+            token_count_kwargs = {}
         else:
-            reasoning_tokens = ctd.reasoning_tokens
-        token_count_kwargs = dict(
-            TokensUsed=output.usage.total_tokens,
-            TokensUsedCompletion=output.usage.completion_tokens,
-            TokensUsedReasoning=reasoning_tokens,
-        )
+            ctd = getattr(usage, "completion_tokens_details", None)
+            if ctd is None:
+                reasoning_tokens = None
+            else:
+                reasoning_tokens = getattr(ctd, "reasoning_tokens", None)
+            token_count_kwargs = dict(
+                TokensUsed=output.usage.total_tokens,
+                TokensUsedCompletion=output.usage.completion_tokens,
+                TokensUsedReasoning=reasoning_tokens,
+            )
         msg = output.choices[0].message
         logprobs = getattr(output.choices[0], "logprobs", None)
         if msg.content is not None:
@@ -198,6 +207,7 @@ def _gpt_common_fmt_output(output):
                 Message=msg.content,
                 **token_count_kwargs,
                 LogProbs=logprobs,
+                Latency=latency,
             )
         elif msg.tool_calls is not None:
             tcs = [
@@ -208,7 +218,13 @@ def _gpt_common_fmt_output(output):
                 )
                 for tc in msg.tool_calls
             ]
-            return LLMMessage(Role="assistant", ToolCalls=tcs, **token_count_kwargs, LogProbs=logprobs)
+            return LLMMessage(
+                Role="assistant",
+                ToolCalls=tcs,
+                **token_count_kwargs,
+                LogProbs=logprobs,
+                Latency=latency,
+            )
         else:
             raise ValueError("Output must be either content or tool call")
 
@@ -301,7 +317,10 @@ class OpenAICompletionsCaller(OpenAICaller):
         return prompt
 
     def format_output(
-        self, output: Any, response_schema: Optional[BaseModel] = None
+        self,
+        output: Any,
+        response_schema: Optional[BaseModel] = None,
+        latency: Optional[float] = None,
     ) -> LLMMessage:
         """Format the completions API output to LLMMessage format."""
         if isinstance(output, GeneratorType):
@@ -311,7 +330,9 @@ class OpenAICompletionsCaller(OpenAICaller):
             if hasattr(output, "choices") and len(output.choices) > 0:
                 choice = output.choices[0]
                 if hasattr(choice, "text"):
-                    return LLMMessage(Role="assistant", Message=choice.text)
+                    return LLMMessage(
+                        Role="assistant", Message=choice.text, Latency=latency
+                    )
                 else:
                     raise ValueError("Unexpected completions API response format")
             else:

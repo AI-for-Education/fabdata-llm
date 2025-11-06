@@ -11,6 +11,7 @@ from typing import (
     Type,
     ClassVar,
 )
+import time
 import datetime
 import logging
 from abc import ABC, abstractmethod
@@ -179,6 +180,7 @@ class LLMMessage(BaseModel):
     TokensUsedCompletion: Optional[int] = None
     TokensUsedReasoning: Optional[int] = None
     LogProbs: Optional[Any] = None
+    Latency: Optional[float] = None
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     def __eq__(self, __value: object) -> bool:
@@ -323,7 +325,10 @@ class LLMCaller(ABC, BaseModel):
             reraise=True
         )
         def sync_retry_wrapper(*args, **kwargs):
-            return self.Func(*args, **kwargs)
+            start_time = time.perf_counter()
+            out = self.Func(*args, **kwargs)
+            latency = time.perf_counter() - start_time
+            return out, latency
         
         # Async version with Tenacity  
         @retry(
@@ -341,7 +346,10 @@ class LLMCaller(ABC, BaseModel):
             reraise=True
         )
         async def async_retry_wrapper(*args, **kwargs):
-            return await self.AFunc(*args, **kwargs)
+            start_time = time.perf_counter()
+            out = await self.AFunc(*args, **kwargs)
+            latency = time.perf_counter() - start_time
+            return out, latency
         
         self._sync_call_with_retry = sync_retry_wrapper
         self._async_call_with_retry = async_retry_wrapper
@@ -395,8 +403,8 @@ class LLMCaller(ABC, BaseModel):
         
         try:
             kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-            response = self._call(**kwargs)
-            formatted_output = self.format_output(response, response_schema=response_schema)
+            response, latency = self._call(**kwargs)
+            formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
             
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)
@@ -421,8 +429,8 @@ class LLMCaller(ABC, BaseModel):
         
         try:
             kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-            response = await self._acall(**kwargs)
-            formatted_output = self.format_output(response, response_schema=response_schema)
+            response, latency = await self._acall(**kwargs)
+            formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
             
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)

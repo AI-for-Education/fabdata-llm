@@ -166,12 +166,28 @@ class GoogleGenAICaller(LLMCaller):
         kwargs["config"] = config
         return kwargs
 
-    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
+    def format_output(
+        self,
+        output: Any,
+        response_schema: Optional[BaseModel] = None,
+        latency: Optional[float] = None,
+    ):
         if isinstance(output, GeneratorType):
             return output
         else:
-            parts = getattr(output.candidates[0].content, "parts")
-            logprobs_result = getattr(output.candidates[0], "logprobs_result")
+            ## token counts
+            usage_metadata = getattr(output, "usage_metadata", None)
+            if usage_metadata is not None:
+                token_count_kwargs = dict(
+                    TokensUsed=usage_metadata.total_token_count,
+                    TokensUsedCompletion=usage_metadata.candidates_token_count,
+                    TokensUsedReasoning=usage_metadata.thoughts_token_count,
+                )
+            else:
+                token_count_kwargs = {}
+            #####
+            parts = getattr(output.candidates[0].content, "parts", None)
+            logprobs_result = getattr(output.candidates[0], "logprobs_result", None)
             if logprobs_result is not None:
                 logprobs = ChoiceLogprobs(
                     content=[
@@ -193,9 +209,18 @@ class GoogleGenAICaller(LLMCaller):
                 )
             else:
                 logprobs = None
-            if parts is not None and getattr(parts[0], "text") is not None:
-                return LLMMessage(Role="assistant", Message=parts[0].text, LogProbs=logprobs)
-            elif parts is not None and getattr(parts[0], "function_call") is not None:
+            if parts is not None and getattr(parts[0], "text", None) is not None:
+                return LLMMessage(
+                    Role="assistant",
+                    Message=parts[0].text,
+                    LogProbs=logprobs,
+                    Latency=latency,
+                    **token_count_kwargs,
+                )
+            elif (
+                parts is not None
+                and getattr(parts[0], "function_call", None) is not None
+            ):
                 tcs = [
                     LLMToolCall(
                         ID=p.function_call.id,
@@ -203,9 +228,15 @@ class GoogleGenAICaller(LLMCaller):
                         Args=p.function_call.args,
                     )
                     for p in parts
-                    if getattr(p, "function_call") is not None
+                    if getattr(p, "function_call", None) is not None
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs, LogProbs=logprobs)
+                return LLMMessage(
+                    Role="assistant",
+                    ToolCalls=tcs,
+                    LogProbs=logprobs,
+                    Latency=latency,
+                    **token_count_kwargs,
+                )
             else:
                 raise ValueError("Output must be either content or tool call")
 

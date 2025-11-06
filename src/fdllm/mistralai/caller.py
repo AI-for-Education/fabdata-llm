@@ -16,7 +16,7 @@ from ..llmtypes import (
     LLMToolCall,
 )
 
-#NOTE: Removed attempt to download mistral tokenizer from huggingface
+# NOTE: Removed attempt to download mistral tokenizer from huggingface
 # now always uses gpt tokenizer
 MISTRALTOKENIZER = False
 from ..openai.tokenizer import tokenize_chatgpt_messages
@@ -55,13 +55,20 @@ class MistralCaller(LLMCaller):
     def format_messagelist(self, messagelist: List[LLMMessage]):
         return [self.format_message(message) for message in messagelist]
 
-    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
+    def format_output(
+        self,
+        output: Any,
+        response_schema: Optional[BaseModel] = None,
+        latency: Optional[float] = None,
+    ):
         if isinstance(output, GeneratorType):
             return output
         else:
             msg = output.choices[0].message
             if msg.content:
-                return LLMMessage(Role="assistant", Message=msg.content.lstrip())
+                return LLMMessage(
+                    Role="assistant", Message=msg.content.lstrip(), Latency=latency
+                )
             elif msg.tool_calls is not None:
                 tcs = [
                     LLMToolCall(
@@ -71,7 +78,7 @@ class MistralCaller(LLMCaller):
                     )
                     for tc in msg.tool_calls
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs)
+                return LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
             else:
                 raise ValueError("Output must be either content or tool call")
 
