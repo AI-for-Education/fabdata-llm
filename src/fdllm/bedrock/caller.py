@@ -84,7 +84,9 @@ class BedrockCaller(LLMCaller):
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         # adjust args for bedrock format
-        kwargs = super()._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+        kwargs = super()._proc_call_args(
+            messages, max_tokens, response_schema, **kwargs
+        )
         inferenceConfig = {}
         inferenceConfig["maxTokens"] = kwargs.pop(self.Args.Max_Tokens)
         for arg in ["temperature", "topP", "stopSequences"]:
@@ -114,7 +116,8 @@ class BedrockCaller(LLMCaller):
                                 "status": "success",
                             }
                         }
-                    for tc in message.ToolCalls ],
+                        for tc in message.ToolCalls
+                    ],
                 }
             ]
         ### Handle assistant tool calls messages
@@ -191,7 +194,12 @@ class BedrockCaller(LLMCaller):
             }
         }
 
-    def format_output(self, output: Any, response_schema: Optional[BaseModel] = None):
+    def format_output(
+        self,
+        output: Any,
+        response_schema: Optional[BaseModel] = None,
+        latency: Optional[float] = None,
+    ):
         if isinstance(output, GeneratorType):
             return output
         else:
@@ -206,11 +214,11 @@ class BedrockCaller(LLMCaller):
                     )
                     for tc in tool_calls
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs)
+                return LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
             else:
                 text = "".join([c["text"] for c in content if "text" in c]).lstrip()
-                #images = [c["image"] for c in content if "image" in c]
-                return LLMMessage(Role="assistant", Message=text)
+                # images = [c["image"] for c in content if "image" in c]
+                return LLMMessage(Role="assistant", Message=text, Latency=latency)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenize_bedrock_messages(self.format_messagelist(messagelist))[0]

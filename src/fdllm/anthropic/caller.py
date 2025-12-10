@@ -4,6 +4,7 @@ from typing import List, Optional
 from types import GeneratorType
 from collections import deque
 import json
+import time
 
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
@@ -24,13 +25,13 @@ from ..llmtypes import (
 from ..tooluse import Tool
 from ..decorators import delayedretry
 from tenacity import (
-    retry, 
-    stop_after_attempt, 
-    wait_exponential, 
+    retry,
+    stop_after_attempt,
+    wait_exponential,
     retry_if_exception_type,
     before_log,
-    after_log, 
-    before_sleep_log
+    after_log,
+    before_sleep_log,
 )
 
 
@@ -135,27 +136,66 @@ class ClaudeCaller(LLMCaller):
             self.Defaults.pop("system", None)
         return out
 
-    def format_output(self, output, response_schema: Optional[BaseModel] = None):
+    def format_output(
+        self,
+        output,
+        response_schema: Optional[BaseModel] = None,
+        latency: Optional[float] = None,
+    ):
         if isinstance(output, GeneratorType):
             return output
         else:
-            if output.content is not None:
+            if getattr(output, "content", None) is not None:
                 content = output.content
                 if isinstance(content[0], BetaThinkingBlock):
                     thinking = content.pop(0)
+                    reasoning_tokens = self.count_tokens(
+                        [LLMMessage(Role="assistant", Message=thinking.thinking)]
+                    )
+                else:
+                    reasoning_tokens = 0
+                #### token counts
+                usage = getattr(output, "usage", None)
+                if usage is not None:
+                    total_tokens = usage.input_tokens + usage.output_tokens
+                    completion_tokens = usage.output_tokens
+                else:
+                    total_tokens = None
+                    completion_tokens = None
+                    reasoning_tokens = None
+                token_count_kwargs = dict(
+                    TokensUsed=total_tokens,
+                    TokensUsedCompletion=completion_tokens,
+                    TokensUsedReasoning=reasoning_tokens,
+                )
                 if isinstance(content[0], BetaToolUseBlock):
                     if response_schema is not None:
                         ### if the user has set a response_schema then the tool use block is
                         ### to be processed as an output format, not as a tool call
                         structured_json = output.content[0].input
                         formatted_content = json.dumps(structured_json)
-                        out = LLMMessage(Role="assistant", Message=formatted_content)
+                        out = LLMMessage(
+                            Role="assistant",
+                            Message=formatted_content,
+                            Latency=latency,
+                            **token_count_kwargs,
+                        )
                     else:
                         # otherwise it should be processed as a tool call
-                        out = LLMMessage(Role="assistant", Message="")
+                        out = LLMMessage(
+                            Role="assistant",
+                            Message="",
+                            Latency=latency,
+                            **token_count_kwargs,
+                        )
                         content = [[], content]
                 else:
-                    out = LLMMessage(Role="assistant", Message=content[0].text)
+                    out = LLMMessage(
+                        Role="assistant",
+                        Message=content[0].text,
+                        Latency=latency,
+                        **token_count_kwargs,
+                    )
                 if len(content) > 1:
                     out.ToolCalls = []
                     for tcout in output.content[1:]:
@@ -234,13 +274,13 @@ class ClaudeStreamingCaller(ClaudeCaller):
 
         self.Func = self.Client.beta.messages.stream
         self.AFunc = self.AClient.beta.messages.stream
-        
+
         # Override retry methods with streaming-specific implementations
         self._create_streaming_retry_methods()
-    
+
     def _create_streaming_retry_methods(self):
         """Create streaming-specific Tenacity-based retry methods."""
-        
+
         # Sync streaming version with Tenacity
         @retry(
             stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
@@ -249,13 +289,16 @@ class ClaudeStreamingCaller(ClaudeCaller):
             before=before_log(self.logger, logging.DEBUG),
             before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
             after=after_log(self.logger, logging.DEBUG),
-            reraise=True
+            reraise=True,
         )
         def sync_streaming_retry(*args, **kwargs):
+            start_time = time.perf_counter()
             with self.Func(*args, **kwargs) as stream:
                 deque(stream.text_stream, maxlen=0)
-                return stream.get_final_message()
-        
+                out = stream.get_final_message()
+            latency = time.perf_counter() - start_time
+            return out, latency
+
         # Async streaming version with Tenacity
         @retry(
             stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
@@ -264,14 +307,17 @@ class ClaudeStreamingCaller(ClaudeCaller):
             before=before_log(self.logger, logging.DEBUG),
             before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
             after=after_log(self.logger, logging.DEBUG),
-            reraise=True
+            reraise=True,
         )
         async def async_streaming_retry(*args, **kwargs):
+            start_time = time.perf_counter()
             async with self.AFunc(*args, **kwargs) as stream:
                 async for _ in stream.text_stream:
                     pass
-                return await stream.get_final_message()
-        
+                out = await stream.get_final_message()
+            latency = time.perf_counter() - start_time
+            return out, latency
+
         # Override the base class retry methods with streaming versions
         self._sync_call_with_retry = sync_streaming_retry
         self._async_call_with_retry = async_streaming_retry
