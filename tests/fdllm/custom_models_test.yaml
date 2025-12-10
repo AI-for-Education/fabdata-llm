@@ -1,26 +1,26 @@
 Google:
-  Api_Interface: GoogleGenAI
-  Max_Token_Arg_Name: max_output_tokens
-  Api_Key_Env_Var: GEMINI_API_KEY
+  api_interface: GoogleGenAI
+  max_token_arg_name: max_output_tokens
+  api_key_env_var: GEMINI_API_KEY
   models:
     gemini-2.0-flash:
-      Api_Model_Name: models/gemini-2.0-flash
-      Vision: False
-      Token_Window: 1048576
-      Token_Limit_Completion: 8192
+      api_model_name: models/gemini-2.0-flash
+      vision: False
+      token_window: 1048576
+      token_limit_completion: 8192
 
 OpenAIBenchmarks:
-  Api_Interface: OpenAI
-  Token_Window: 200000
-  Token_Limit_Completion: 100000
-  Tool_Use: True
-  Vision: True
+  api_interface: OpenAI
+  token_window: 200000
+  token_limit_completion: 100000
+  tool_use: True
+  vision: True
   models:
     gpt-4.1-mini:
-      Api_Model_Name: gpt-4.1-mini-2025-04-14
-      Token_Window: 1047576
-      Token_Limit_Completion: 32768
+      api_model_name: gpt-4.1-mini-2025-04-14
+      token_window: 1047576
+      token_limit_completion: 32768
     gpt-4.1:
-      Api_Model_Name: gpt-4.1-2025-04-14
-      Token_Window: 1047576
-      Token_Limit_Completion: 32768
+      api_model_name: gpt-4.1-2025-04-14
+      token_window: 1047576
+      token_limit_completion: 32768

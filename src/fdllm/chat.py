@@ -40,13 +40,13 @@ class ChatController(BaseModel):
         if reverse:
             for msg in self.History[-1::-1]:
                 histbuff.append(msg)
-                if msg.Role == "user":
+                if msg.role == "user":
                     yield histbuff[-1::-1]
                     histbuff = []
         else:
             for msg in self.History:
                 histbuff.append(msg)
-                if msg.Role == "assistant" and msg.ToolCalls is None:
+                if msg.role == "assistant" and msg.tool_calls is None:
                     yield histbuff
                     histbuff = []
 
@@ -55,7 +55,7 @@ class ChatController(BaseModel):
             yield [
                 msg
                 for msg in interaction
-                if msg.ToolCalls is not None and msg.ToolCalls[0].Response is None
+                if msg.tool_calls is not None and msg.tool_calls[0].response is None
             ]
     
     def tool_responses(self, reverse=False):
@@ -63,7 +63,7 @@ class ChatController(BaseModel):
             yield [
                 msg
                 for msg in interaction
-                if msg.ToolCalls is not None and msg.ToolCalls[0].Response is not None
+                if msg.tool_calls is not None and msg.tool_calls[0].response is not None
             ]
 
     def chat(
@@ -83,7 +83,7 @@ class ChatController(BaseModel):
         except:
             self._clean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             raise
-        if new_message is not None and new_message.Role == "error":
+        if new_message is not None and new_message.role == "error":
             self._clean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             return new_message, None
         result = self.Caller.call(latest_convo, max_tokens, response_schema, **kwargs)
@@ -108,7 +108,7 @@ class ChatController(BaseModel):
         except:
             await self._aclean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             raise
-        if new_message is not None and new_message.Role == "error":
+        if new_message is not None and new_message.role == "error":
             await self._aclean_plugins(None, max_tokens, response_schema, images, detail, **kwargs)
             return new_message, None
         result = await self.Caller.acall(latest_convo, max_tokens, response_schema, **kwargs)
@@ -148,7 +148,7 @@ class ChatController(BaseModel):
         images = LLMImage.list_from_images(images, detail=detail)
         if prompt in [LLM_INAPPROPRIATE_QUESTION]:
             return (
-                LLMMessage(Role="error", Message=prompt),
+                LLMMessage(role="error", message=prompt),
                 [],
             )
         return self._build_latest_convo(prompt, images, max_tokens)
@@ -162,18 +162,18 @@ class ChatController(BaseModel):
             val is not None
             for val in [self.Sys_Msg.get(-1, None), self.Sys_Msg.get(-2, None)]
         ):
-            if not self.Caller.Model.Flexible_SysMsg:
+            if not self.Caller.model.flexible_sysmsg:
                 raise ValueError(
                     f"Caller {self.Caller} doesn't support multiple system message placements"
                 )
 
         def build_messagelist():
             sys_msg_llmmsg = {
-                idx: LLMMessage(Role="system", Message=msg)
+                idx: LLMMessage(role="system", message=msg)
                 for idx, msg in self.Sys_Msg.items()
             }
             sys_msg_conf_llmmsg = {
-                idx: LLMMessage(Role="system", Message=msg)
+                idx: LLMMessage(role="system", message=msg)
                 for idx, msg in self.Sys_Msg_Confirmation.items()
             }
             if new_message is not None:
@@ -198,14 +198,13 @@ class ChatController(BaseModel):
             return latest_convo
 
         if prompt:
-            new_message = LLMMessage(Role="user", Message=prompt, Images=images)
+            new_message = LLMMessage(role="user", message=prompt, images=images)
         else:
             new_message = None
         latest_convo = build_messagelist()
-        x = 1
         while (
             self.Caller.count_tokens(latest_convo)
-            > self.Caller.Token_Window - max_tokens
+            > self.Caller.token_window - max_tokens
         ):
             if len(self.History) > 0:
                 self.History.pop(0)

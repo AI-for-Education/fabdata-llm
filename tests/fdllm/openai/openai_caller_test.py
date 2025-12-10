@@ -13,7 +13,7 @@ TEST_ROOT = HERE.parent
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"
 TEST_MESSAGE = {
-    role: LLMMessage(Role=role, Message=("" if role == "error" else TEST_MESSAGE_TEXT))
+    role: LLMMessage(role=role, message=("" if role == "error" else TEST_MESSAGE_TEXT))
     for role in MESSAGE_ROLES
 }
 TEST_MESSAGE_LIST = [TEST_MESSAGE[role] for role in ("system", "user", "assistant")]
@@ -38,7 +38,7 @@ def test_init_openaivision(model):
 @pytest.mark.parametrize(
     "role, expected",
     [
-        (role, {"role": role, "content": message.Message})
+        (role, {"role": role, "content": message.message})
         for role, message in TEST_MESSAGE.items()
     ],
 )

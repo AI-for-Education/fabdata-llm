@@ -54,7 +54,7 @@ def general_query(
     ntok = caller.count_tokens([msg])
     if max_input_tokens is not None and ntok > max_input_tokens:
         raise ValueError("Message is too long")
-    max_tokens = caller.Token_Window - ntok
+    max_tokens = caller.token_window - ntok
     if max_tokens < min_new_token_window:
         if reduce_callback is None:
             raise ValueError("Message is too long")
@@ -63,21 +63,21 @@ def general_query(
                 jsonin, jsonout = reduce_callback(jsonin, jsonout)
                 msg = _gen_message(jsonin, jsonout, images)
                 ntok = caller.count_tokens([msg])
-                max_tokens = caller.Token_Window - ntok
+                max_tokens = caller.token_window - ntok
     if temperature is not None:
         call_kwargs = {**call_kwargs, "temperature": temperature}
     out = caller.call(msg, max_tokens=max_tokens, **call_kwargs)
 
     try:
-        return ADict(json.loads(_trim_nonjson(out.Message)))
+        return ADict(json.loads(_trim_nonjson(out.message)))
     except:
         raise ValueError("Invalid output")
 
 
 def _gen_message(jsonin, jsonout, role="system", images=[], detail="low"):
     return LLMMessage(
-        Role=role,
-        Message=(
+        role=role,
+        message=(
             "Given the values in JSON1, fill in the empty values in JSON2:"
             f"\n\nJSON1:\n{json.dumps(jsonin, ensure_ascii=False)}"
             f"\n\nJSON2:\n{json.dumps(jsonout, ensure_ascii=False)}"
@@ -85,7 +85,7 @@ def _gen_message(jsonin, jsonout, role="system", images=[], detail="low"):
             " For any field names that contain '::', only reproduce the part of the"
             " name before the '::'."
         ),
-        Images=LLMImage.list_from_images(images, detail=detail) if images else None,
+        images=LLMImage.list_from_images(images, detail=detail) if images else None,
     )
 
 

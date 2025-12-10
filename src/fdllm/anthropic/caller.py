@@ -45,62 +45,62 @@ class ClaudeCaller(LLMCaller):
         if Modtype not in [AnthropicModelType, AnthropicStreamingModelType]:
             raise ValueError(f"{model} is not supported")
 
-        model_: LLMModelType = Modtype(Name=model)
-        client = Anthropic(**model_.Client_Args)
-        aclient = AsyncAnthropic(**model_.Client_Args)
+        model_: LLMModelType = Modtype(name=model)
+        client = Anthropic(**model_.client_args)
+        aclient = AsyncAnthropic(**model_.client_args)
 
         call_arg_names = LLMCallArgNames(
-            Model="model",
-            Messages="messages",
-            Max_Tokens=model_.Max_Token_Arg_Name,
-            Response_Schema="tools",
+            model="model",
+            messages="messages",
+            max_tokens=model_.max_token_arg_name,
+            response_schema="tools",
         )
 
         super().__init__(
-            Model=model_,
-            Func=client.beta.messages.create,
-            AFunc=aclient.beta.messages.create,
-            Arg_Names=call_arg_names,
-            Token_Window=model_.Token_Window,
-            Token_Limit_Completion=model_.Token_Limit_Completion,
+            model=model_,
+            func=client.beta.messages.create,
+            afunc=aclient.beta.messages.create,
+            arg_names=call_arg_names,
+            token_window=model_.token_window,
+            token_limit_completion=model_.token_limit_completion,
             Client=client,
             AClient=aclient,
         )
 
     def format_message(self, message: LLMMessage):
-        if message.Role == "tool":
+        if message.role == "tool":
             return {
                 "role": "user",
                 "content": [
                     {
                         "type": "tool_result",
-                        "tool_use_id": tc.ID,
-                        "content": tc.Response,
+                        "tool_use_id": tc.id,
+                        "content": tc.response,
                     }
-                    for tc in message.ToolCalls
+                    for tc in message.tool_calls
                 ],
             }
-        elif message.Role == "assistant" and message.ToolCalls is not None:
+        elif message.role == "assistant" and message.tool_calls is not None:
             out = {"role": "assistant", "content": []}
-            if message.Message:
-                out["content"].append({"type": "text", "text": message.Message})
-            for tc in message.ToolCalls:
+            if message.message:
+                out["content"].append({"type": "text", "text": message.message})
+            for tc in message.tool_calls:
                 out["content"].append(
                     {
                         "type": "tool_use",
-                        "id": tc.ID,
-                        "name": tc.Name,
-                        "input": tc.Args,
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.args,
                     }
                 )
             return out
-        elif message.Role == "user" and message.Images is not None:
-            if not self.Model.Vision:
+        elif message.role == "user" and message.images is not None:
+            if not self.model.vision:
                 raise NotImplementedError(
-                    f"Tried to pass images but {self.Model.Name} doesn't support images"
+                    f"Tried to pass images but {self.model.name} doesn't support images"
                 )
-            for im in message.Images:
-                if im.Url and (im.Img is None):
+            for im in message.images:
+                if im.url and (im.img is None):
                     raise NotImplementedError(
                         "Anthropic API does not support images by URL"
                     )
@@ -114,26 +114,26 @@ class ClaudeCaller(LLMCaller):
                             "data": im.encode(),
                         },
                     }
-                    for im in message.Images
+                    for im in message.images
                 ],
-                {"type": "text", "text": message.Message},
+                {"type": "text", "text": message.message},
             ]
-            return {"role": message.Role, "content": content}
+            return {"role": message.role, "content": content}
         else:
-            return {"role": message.Role, "content": message.Message}
+            return {"role": message.role, "content": message.message}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         out = []
         sysmsgs = []
         for message in messagelist:
-            if message.Role == "system":
-                sysmsgs.append(message.Message)
+            if message.role == "system":
+                sysmsgs.append(message.message)
             else:
                 out.append(self.format_message(message))
         if sysmsgs:
-            self.Defaults["system"] = sysmsgs[0]
+            self.defaults["system"] = sysmsgs[0]
         else:
-            self.Defaults.pop("system", None)
+            self.defaults.pop("system", None)
         return out
 
     def format_output(
@@ -150,7 +150,7 @@ class ClaudeCaller(LLMCaller):
                 if isinstance(content[0], BetaThinkingBlock):
                     thinking = content.pop(0)
                     reasoning_tokens = self.count_tokens(
-                        [LLMMessage(Role="assistant", Message=thinking.thinking)]
+                        [LLMMessage(role="assistant", message=thinking.thinking)]
                     )
                 else:
                     reasoning_tokens = 0
@@ -164,9 +164,9 @@ class ClaudeCaller(LLMCaller):
                     completion_tokens = None
                     reasoning_tokens = None
                 token_count_kwargs = dict(
-                    TokensUsed=total_tokens,
-                    TokensUsedCompletion=completion_tokens,
-                    TokensUsedReasoning=reasoning_tokens,
+                    tokens_used=total_tokens,
+                    tokens_used_completion=completion_tokens,
+                    tokens_used_reasoning=reasoning_tokens,
                 )
                 if isinstance(content[0], BetaToolUseBlock):
                     if response_schema is not None:
@@ -175,36 +175,36 @@ class ClaudeCaller(LLMCaller):
                         structured_json = output.content[0].input
                         formatted_content = json.dumps(structured_json)
                         out = LLMMessage(
-                            Role="assistant",
-                            Message=formatted_content,
-                            Latency=latency,
+                            role="assistant",
+                            message=formatted_content,
+                            latency=latency,
                             **token_count_kwargs,
                         )
                     else:
                         # otherwise it should be processed as a tool call
                         out = LLMMessage(
-                            Role="assistant",
-                            Message="",
-                            Latency=latency,
+                            role="assistant",
+                            message="",
+                            latency=latency,
                             **token_count_kwargs,
                         )
                         content = [[], content]
                 else:
                     out = LLMMessage(
-                        Role="assistant",
-                        Message=content[0].text,
-                        Latency=latency,
+                        role="assistant",
+                        message=content[0].text,
+                        latency=latency,
                         **token_count_kwargs,
                     )
                 if len(content) > 1:
-                    out.ToolCalls = []
+                    out.tool_calls = []
                     for tcout in output.content[1:]:
                         tc = LLMToolCall(
-                            ID=tcout.id,
-                            Name=tcout.name,
-                            Args=tcout.input,
+                            id=tcout.id,
+                            name=tcout.name,
+                            args=tcout.input,
                         )
-                    out.ToolCalls.append(tc)
+                        out.tool_calls.append(tc)
             return out
 
     def format_tool(self, tool: Tool):
@@ -263,7 +263,7 @@ class ClaudeCaller(LLMCaller):
 
     def count_tokens(self, messagelist: List[LLMMessage]):
         return self.Client.beta.messages.count_tokens(
-            model=self.Model.Api_Model_Name,
+            model=self.model.api_model_name,
             messages=self.format_messagelist(messagelist),
         ).input_tokens
 

@@ -18,11 +18,11 @@ def cache():
     cache = LLMMessageCache()
     cache.add_item(
         phone_number,
-        LLMMessage(Role="user", Message="initial message", TokensUsed= 2)
+        LLMMessage(role="user", message="initial message", tokens_used=2)
     )
     cache.add_item(
         phone_number_for_reset,
-        LLMMessage(Role="user", Message="second message", TokensUsed= 2)
+        LLMMessage(role="user", message="second message", tokens_used=2)
     )
     return cache
 
@@ -43,16 +43,16 @@ def test_get_user_chat_history_empty(empty_cache: LLMMessageCache):
 def test_get_user_chat_history_last_entry(empty_cache: LLMMessageCache):
     empty_cache.add_item(
         phone_number,
-        LLMMessage(Role="user", Message="initial message", TokensUsed= 2)
+        LLMMessage(role="user", message="initial message", tokens_used=2)
     )
     empty_cache.add_item(
         phone_number,
-        LLMMessage(Role="user", Message="second message", TokensUsed= 2)
+        LLMMessage(role="user", message="second message", tokens_used=2)
     )
     result = empty_cache.get_user_chat_history_last_entry(phone_number)
     assert result is not None
     assert isinstance(result, LLMMessage)
-    assert result.Message.lower() == "second message"
+    assert result.message.lower() == "second message"
 
 def test_get_user_chat_history_last_entry_empty(empty_cache: LLMMessageCache):
     result = empty_cache.get_user_chat_history_last_entry(phone_number)
@@ -62,7 +62,7 @@ def test_add_items(empty_cache: LLMMessageCache):
     final_message = "third message"
     empty_cache.add_item(
         phone_number,
-        LLMMessage(Role="user", Message="initial message", TokensUsed= 2)
+        LLMMessage(role="user", message="initial message", tokens_used=2)
     )
 
     initial_add_count = len(empty_cache[phone_number])
@@ -70,8 +70,8 @@ def test_add_items(empty_cache: LLMMessageCache):
     empty_cache.add_items(
         phone_number,
         [
-            LLMMessage(Role="user", Message="second message", TokensUsed= 4),
-            LLMMessage(Role="user", Message=final_message, TokensUsed= 6)
+            LLMMessage(role="user", message="second message", tokens_used=4),
+            LLMMessage(role="user", message=final_message, tokens_used=6)
         ]
     )
 
@@ -79,7 +79,7 @@ def test_add_items(empty_cache: LLMMessageCache):
 
     assert initial_add_count == 1
     assert final_cache_count == 3
-    assert empty_cache[phone_number][final_cache_count-1].Message == final_message
+    assert empty_cache[phone_number][final_cache_count-1].message == final_message
 
 def test_reset_cache(cache: LLMMessageCache):
     initial_hist = cache[phone_number_for_reset]
@@ -98,9 +98,9 @@ def test_add_max_items(empty_cache: LLMMessageCache):
     for (i, n) in enumerate(range(1, empty_cache.max_user_cache_items + 1)):
         if i % 2 == 0:
             Q_and_a_sequence = Q_and_a_sequence + 1
-            history.append(LLMMessage(Role="user", Message=f"question: {Q_and_a_sequence}", TokensUsed=0))
+            history.append(LLMMessage(role="user", message=f"question: {Q_and_a_sequence}", tokens_used=0))
         else:
-            history.append(LLMMessage(Role="assistant", Message=f"answer: {Q_and_a_sequence}", TokensUsed=0))
+            history.append(LLMMessage(role="assistant", message=f"answer: {Q_and_a_sequence}", tokens_used=0))
 
 
     empty_cache.add_items(
@@ -112,14 +112,13 @@ def test_add_max_items(empty_cache: LLMMessageCache):
     empty_cache.add_items(
         phone_number,
         [
-            LLMMessage(Role="user", Message=final_question, TokensUsed=0),
-            LLMMessage(Role="assistant", Message=final_answer, TokensUsed=0)
+            LLMMessage(role="user", message=final_question, tokens_used=0),
+            LLMMessage(role="assistant", message=final_answer, tokens_used=0)
         ]
     )
     final_cache_count = len(empty_cache[phone_number])
 
     assert initial_add_count == empty_cache.max_user_cache_items
     assert final_cache_count == empty_cache.max_user_cache_items
-    assert empty_cache[phone_number][0].Message == "question: 2"
-    assert empty_cache[phone_number][final_cache_count-1].Message == final_answer
-
+    assert empty_cache[phone_number][0].message == "question: 2"
+    assert empty_cache[phone_number][final_cache_count-1].message == final_answer

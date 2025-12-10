@@ -19,71 +19,66 @@ class GoogleGenAICaller(LLMCaller):
 
     def __init__(self, model: str = "gemini-2.0-flash-exp"):
         Modtype = LLMModelType.get_type(model)
-        model: LLMModelType = Modtype(Name=model)
+        model: LLMModelType = Modtype(name=model)
 
         # Gemini Models
-        client = genai.Client(**model.Client_Args)
+        client = genai.Client(**model.client_args)
         # TODO: support vertex models
         # client = genai.Client(
         #     vertexai=True, project="your-project-id", location="us-central1"
         # )
 
-        call_arg_names = LLMCallArgNames(
-            Model="model",
-            Messages="contents",
-            Max_Tokens=model.Max_Token_Arg_Name,
-            Response_Schema="response_schema",
-        )
+        call_arg_names = LLMCallArgNames(model="model", messages="contents", max_tokens=model.max_token_arg_name, response_schema="response_schema")
 
         # drop CallArgs for google?
         super().__init__(
-            Model=model,
-            Func=client.models.generate_content,
-            AFunc=client.aio.models.generate_content,
-            Arg_Names=call_arg_names,
-            Defaults={},
-            Token_Window=model.Token_Window,
-            Token_Limit_Completion=model.Token_Limit_Completion,
+            model=model,
+            func=client.models.generate_content,
+            afunc=client.aio.models.generate_content,
+            arg_names=call_arg_names,
+            defaults={},
+            token_window=model.token_window,
+            token_limit_completion=model.token_limit_completion,
             Client=client,
         )
 
     def format_message(self, message: LLMMessage):
         ### Handle tool results
-        if message.Role == "tool":
+        if message.role == "tool":
             return {
                 "role": "tool",
                 "parts": [
                     {
                         "function_response": {
-                            "id": tc.ID,
-                            "name": tc.Name,
-                            "response": {"result": tc.Response},
+                            "id": tc.id,
+                            "name": tc.name,
+                            "response": {"result": tc.response},
                         },
                     }
-                    for tc in message.ToolCalls
+                    for tc in message.tool_calls
                 ],
             }
 
         ### Handle assistant tool calls messages
-        elif message.Role == "assistant" and message.ToolCalls is not None:
+        elif message.role == "assistant" and message.tool_calls is not None:
             return {
                 "role": "model",
                 "parts": [
                     {
                         "function_call": {
-                            "id": tc.ID,
-                            "name": tc.Name,
-                            "args": tc.Args,
+                            "id": tc.id,
+                            "name": tc.name,
+                            "args": tc.args,
                         }
                     }
-                    for tc in message.ToolCalls
+                    for tc in message.tool_calls
                 ],
             }
         ### Handle user messages which contain images
-        elif message.Role == "user" and message.Images is not None:
-            if not self.Model.Vision:
+        elif message.role == "user" and message.images is not None:
+            if not self.model.vision:
                 raise NotImplementedError(
-                    f"Tried to pass images but {self.Model.Name} doesn't support images"
+                    f"Tried to pass images but {self.model.name} doesn't support images"
                 )
             content = [
                 *[
@@ -93,23 +88,23 @@ class GoogleGenAICaller(LLMCaller):
                             "mime_type": "image/png",
                         },
                     }
-                    for im in message.Images
+                    for im in message.images
                 ],
-                {"text": message.Message},
+                {"text": message.message},
             ]
-            return {"role": message.Role, "parts": content}
+            return {"role": message.role, "parts": content}
         else:
-            role = message.Role
+            role = message.role
             if role == "assistant":
                 role = "model"
-            return {"role": role, "parts": [{"text": message.Message}]}
+            return {"role": role, "parts": [{"text": message.message}]}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         out = []
         sysmsgs = []
         for message in messagelist:
-            if message.Role == "system":
-                sysmsgs.append(message.Message)
+            if message.role == "system":
+                sysmsgs.append(message.message)
             else:
                 outmsg = self.format_message(message)
                 if isinstance(outmsg, list):
@@ -117,9 +112,9 @@ class GoogleGenAICaller(LLMCaller):
                 else:
                     out.append(outmsg)
         if sysmsgs:
-            self.Defaults["system"] = sysmsgs[0]
+            self.defaults["system"] = sysmsgs[0]
         else:
-            self.Defaults.pop("system", None)
+            self.defaults.pop("system", None)
         return out
 
     def format_tool(self, tool: Tool):
@@ -148,7 +143,7 @@ class GoogleGenAICaller(LLMCaller):
         if "top_logprobs" in kwargs:
             config["logprobs"] = kwargs.pop("top_logprobs")
         for arg in [
-            self.Arg_Names.Max_Tokens,
+            self.arg_names.max_tokens,
             "tools",
             "temperature",
             "top_p",
@@ -179,9 +174,9 @@ class GoogleGenAICaller(LLMCaller):
             usage_metadata = getattr(output, "usage_metadata", None)
             if usage_metadata is not None:
                 token_count_kwargs = dict(
-                    TokensUsed=usage_metadata.total_token_count,
-                    TokensUsedCompletion=usage_metadata.candidates_token_count,
-                    TokensUsedReasoning=usage_metadata.thoughts_token_count,
+                    tokens_used=usage_metadata.total_token_count,
+                    tokens_used_completion=usage_metadata.candidates_token_count,
+                    tokens_used_reasoning=usage_metadata.thoughts_token_count,
                 )
             else:
                 token_count_kwargs = {}
@@ -211,10 +206,10 @@ class GoogleGenAICaller(LLMCaller):
                 logprobs = None
             if parts is not None and getattr(parts[0], "text", None) is not None:
                 return LLMMessage(
-                    Role="assistant",
-                    Message=parts[0].text,
-                    LogProbs=logprobs,
-                    Latency=latency,
+                    role="assistant",
+                    message=parts[0].text,
+                    log_probs=logprobs,
+                    latency=latency,
                     **token_count_kwargs,
                 )
             elif (
@@ -223,18 +218,18 @@ class GoogleGenAICaller(LLMCaller):
             ):
                 tcs = [
                     LLMToolCall(
-                        ID=p.function_call.id,
-                        Name=p.function_call.name,
-                        Args=p.function_call.args,
+                        id=p.function_call.id,
+                        name=p.function_call.name,
+                        args=p.function_call.args,
                     )
                     for p in parts
                     if getattr(p, "function_call", None) is not None
                 ]
                 return LLMMessage(
-                    Role="assistant",
-                    ToolCalls=tcs,
-                    LogProbs=logprobs,
-                    Latency=latency,
+                    role="assistant",
+                    tool_calls=tcs,
+                    log_probs=logprobs,
+                    latency=latency,
                     **token_count_kwargs,
                 )
             else:
@@ -245,6 +240,6 @@ class GoogleGenAICaller(LLMCaller):
     # https://medium.com/google-cloud/counting-gemini-text-tokens-locally-with-the-vertex-ai-sdk-78979fea6244
     def count_tokens(self, messagelist: List[LLMMessage]):
         return self.Client.models.count_tokens(
-            model=self.Model.Api_Model_Name,
+            model=self.model.api_model_name,
             contents=self.format_messagelist(messagelist),
         ).total_tokens

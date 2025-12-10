@@ -27,12 +27,10 @@ def get_caller(model: str) -> LLMCaller:
             f"{model} is not a recognised model name, check models.yaml"
         )
     model_params = models[model]
-    if "Api_Interface" not in model_params:
+    api_interface = model_params.get("api_interface") or model_params.get("Api_Interface")
+    if api_interface is None:
         raise ValueError(f"{model} does not have an API interface defined")
-    if model_params["Api_Interface"] not in API_CALLERS:
-        raise ValueError(
-            f"{model_params['Api_Interface']} is not a recognised API interface"
-        )
+    if api_interface not in API_CALLERS:
+        raise ValueError(f"{api_interface} is not a recognised API interface")
     else:
-        return API_CALLERS[model_params["Api_Interface"]](model)
-
+        return API_CALLERS[api_interface](model)

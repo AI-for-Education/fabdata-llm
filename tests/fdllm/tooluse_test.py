@@ -57,30 +57,30 @@ class TESTTOOLPLUGIN(ToolUsePlugin):
 
 TEST_PROMPT_TEXT = "This is a user test"
 TEST_OUTPUT_TEXT = "This is an output test"
-TEST_PROMPT_MESSAGE = LLMMessage(Role="user", Message=TEST_PROMPT_TEXT)
-TEST_LLM_OUTPUT = LLMMessage(Role="assistant", Message=TEST_OUTPUT_TEXT)
+TEST_PROMPT_MESSAGE = LLMMessage(role="user", message=TEST_PROMPT_TEXT)
+TEST_LLM_OUTPUT = LLMMessage(role="assistant", message=TEST_OUTPUT_TEXT)
 
 TEST_TOOL_CALLS = {
-    "valid_single": [LLMToolCall(ID="testtc1", Name="mul", Args={"x": 2, "y": 4})],
-    "missing_single": [LLMToolCall(ID="testtc1", Name="mul", Args={"x": 2})],
+    "valid_single": [LLMToolCall(id="testtc1", name="mul", args={"x": 2, "y": 4})],
+    "missing_single": [LLMToolCall(id="testtc1", name="mul", args={"x": 2})],
     "extra_single": [
-        LLMToolCall(ID="testtc1", Name="mul", Args={"x": 2, "y": 4, "z": 6})
+        LLMToolCall(id="testtc1", name="mul", args={"x": 2, "y": 4, "z": 6})
     ],
     "valid_multi": [
-        LLMToolCall(ID="testtc1", Name="mul", Args={"x": 2, "y": 4}),
-        LLMToolCall(ID="testtc2", Name="add", Args={"x": 6, "y": 8}),
+        LLMToolCall(id="testtc1", name="mul", args={"x": 2, "y": 4}),
+        LLMToolCall(id="testtc2", name="add", args={"x": 6, "y": 8}),
     ],
     "missing_multi": [
-        LLMToolCall(ID="testtc1", Name="mul", Args={"x": 2}),
-        LLMToolCall(ID="testtc2", Name="add", Args={"x": 6}),
+        LLMToolCall(id="testtc1", name="mul", args={"x": 2}),
+        LLMToolCall(id="testtc2", name="add", args={"x": 6}),
     ],
     "extra_multi": [
-        LLMToolCall(ID="testtc1", Name="mul", Args={"x": 2, "y": 4, "z": 6}),
-        LLMToolCall(ID="testtc2", Name="add", Args={"x": 6, "y": 8, "z": 10}),
+        LLMToolCall(id="testtc1", name="mul", args={"x": 2, "y": 4, "z": 6}),
+        LLMToolCall(id="testtc2", name="add", args={"x": 6, "y": 8, "z": 10}),
     ],
 }
 TEST_TOOL_CALL_OUTPUTS = {
-    key: LLMMessage(Role="assistant", ToolCalls=tc)
+    key: LLMMessage(role="assistant", tool_calls=tc)
     for key, tc in TEST_TOOL_CALLS.items()
 }
 
@@ -133,7 +133,7 @@ def test_toolcall(toolstr: str, caller: str, test_over):
     assert len(controller.History) == 4
     toolresult = controller.History[2]
     toolresultmanual = [
-        pt.execute(**tc.Args)
-        for pt, tc in zip(plugin.Tools, TEST_TOOL_CALL_OUTPUTS[validstr].ToolCalls)
+        pt.execute(**tc.args)
+        for pt, tc in zip(plugin.Tools, TEST_TOOL_CALL_OUTPUTS[validstr].tool_calls)
     ]
-    assert [tc.Response for tc in toolresult.ToolCalls] == toolresultmanual
+    assert [tc.response for tc in toolresult.tool_calls] == toolresultmanual

@@ -1,16 +1,17 @@
+# Snake_case keys are preferred; legacy TitleCase keys are still accepted for compatibility.
 models:
   openai-model-name:
-    Api_Interface: OpenAI # required
-    Token_Window: # required, size of context window
-    Api_Model_Name: # if different from model-name (ie including a path)
-    Max_Token_Arg_Name: # defaults to "max_completion_tokens"
-    # some openai-compatible API endpoints require "max_tokens" instead 
-    Api_Key_Env_Var: # name of environment variable holding api key
-    Token_Limit_Completion: # maximum size of generated text
-    Flexible_Sys_Msg: 
-    Tool_Use:
-    Vision: 
-    Client_Args:
+    api_interface: OpenAI # required
+    token_window: # required, size of context window
+    api_model_name: # if different from model-name (ie including a path)
+    max_token_arg_name: # defaults to "max_completion_tokens"
+    # some openai-compatible API endpoints require "max_tokens" instead
+    api_key_env_var: # name of environment variable holding api key
+    token_limit_completion: # maximum size of generated text
+    flexible_sysmsg:
+    tool_use:
+    vision:
+    client_args:
       api_key:
       organization:
       base_url:
@@ -21,15 +22,15 @@ models:
       http_client:
 
   azure-model-name:
-    Api_Interface: AzureOpenAI # required
-    Token_Window: # required
-    Api_Model_Name:
-    Api_Key_Env_Var:
-    Token_Limit_Completion:
-    Flexible_Sys_Msg:
-    Tool_Use:
-    Vision:
-    Client_Args:
+    api_interface: AzureOpenAI # required
+    token_window: # required
+    api_model_name:
+    api_key_env_var:
+    token_limit_completion:
+    flexible_sysmsg:
+    tool_use:
+    vision:
+    client_args:
       azure_deployment:
       api_version:
       api_key:
@@ -43,30 +44,30 @@ models:
       http_client:
 
   azure-mistal-model-name:
-    Api_Interface: AzureMistralAI # required
-    Token_Window: # required
-    Api_Model_Name:
-    Api_Key_Env_Var:
-    Token_Limit_Completion:
-    Flexible_Sys_Msg:
-    Tool_Use:
-    Vision:
-    Client_Args:
+    api_interface: AzureMistralAI # required
+    token_window: # required
+    api_model_name:
+    api_key_env_var:
+    token_limit_completion:
+    flexible_sysmsg:
+    tool_use:
+    vision:
+    client_args:
       api_key:
       endpoint:
       max_retries:
       timeout:
 
   anthropic-model-name:
-    Api_Interface: Anthropic # required
-    Token_Window: # required
-    Api_Model_Name:
-    Api_Key_Env_Var:
-    Token_Limit_Completion:
-    Flexible_Sys_Msg: # false for Anthropic models 
-    Tool_Use:
-    Vision:
-    Client_Args:
+    api_interface: Anthropic # required
+    token_window: # required
+    api_model_name:
+    api_key_env_var:
+    token_limit_completion:
+    flexible_sysmsg: # false for Anthropic models
+    tool_use:
+    vision:
+    client_args:
       api_key:
       auth_token:
       base_url:

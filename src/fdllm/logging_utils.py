@@ -61,13 +61,13 @@ def truncate_prompt(messages: List["LLMMessage"], max_length: int = 50) -> str:
         return "<empty>"
     
     # Find the last user message for the most relevant content
-    user_messages = [msg for msg in messages if msg.Role == "user"]
+    user_messages = [msg for msg in messages if msg.role == "user"]
     if user_messages:
         last_user_msg = user_messages[-1]
-        content = last_user_msg.Message or "<no text content>"
+        content = last_user_msg.message or "<no text content>"
     else:
         # Fallback to first message
-        content = messages[0].Message or f"<{messages[0].Role} message>"
+        content = messages[0].message or f"<{messages[0].role} message>"
     
     return truncate_text(content, max_length)
 

@@ -30,27 +30,27 @@ class MistralCaller(LLMCaller):
         if Modtype not in [AzureMistralAIModelType]:
             raise ValueError(f"{model} is not supported")
 
-        model_: LLMModelType = Modtype(Name=model)
-        model_.Name = "azureai"
+        model_: LLMModelType = Modtype(name=model)
+        model_.name = "azureai"
 
-        client = MistralClient(**model_.Client_Args)
-        aclient = MistralAsyncClient(**model_.Client_Args)
+        client = MistralClient(**model_.client_args)
+        aclient = MistralAsyncClient(**model_.client_args)
         super().__init__(
-            Model=model_,
-            Func=client.chat,
-            AFunc=aclient.chat,
-            Arg_Names=LLMCallArgNames(
-                Model="model",
-                Messages="messages",
-                Max_Tokens="max_tokens",
+            model=model_,
+            func=client.chat,
+            afunc=aclient.chat,
+            arg_names=LLMCallArgNames(
+                model="model",
+                messages="messages",
+                max_tokens="max_tokens",
             ),
-            Defaults={},
-            Token_Window=model_.Token_Window,
-            Token_Limit_Completion=model_.Token_Limit_Completion,
+            defaults={},
+            token_window=model_.token_window,
+            token_limit_completion=model_.token_limit_completion,
         )
 
     def format_message(self, message: LLMMessage):
-        return ChatMessage(role=message.Role, content=message.Message)
+        return ChatMessage(role=message.role, content=message.message)
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         return [self.format_message(message) for message in messagelist]
@@ -67,18 +67,18 @@ class MistralCaller(LLMCaller):
             msg = output.choices[0].message
             if msg.content:
                 return LLMMessage(
-                    Role="assistant", Message=msg.content.lstrip(), Latency=latency
+                    role="assistant", message=msg.content.lstrip(), latency=latency
                 )
             elif msg.tool_calls is not None:
                 tcs = [
                     LLMToolCall(
-                        ID=tc.id,
-                        Name=tc.function.name,
-                        Args=json.loads(tc.function.arguments),
+                        id=tc.id,
+                        name=tc.function.name,
+                        args=json.loads(tc.function.arguments),
                     )
                     for tc in msg.tool_calls
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
+                return LLMMessage(role="assistant", tool_calls=tcs, latency=latency)
             else:
                 raise ValueError("Output must be either content or tool call")
 

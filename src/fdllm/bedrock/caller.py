@@ -48,27 +48,27 @@ class BedrockCaller(LLMCaller):
         if Modtype not in [BedrockModelType]:
             raise ValueError(f"{model} is not supported")
 
-        model_: LLMModelType = Modtype(Name=model)
+        model_: LLMModelType = Modtype(name=model)
 
-        client = boto3.client(service_name="bedrock-runtime", **model_.Client_Args)
+        client = boto3.client(service_name="bedrock-runtime", **model_.client_args)
         aclient = aioboto3.session.Session().client(
-            service_name="bedrock-runtime", **model_.Client_Args
+            service_name="bedrock-runtime", **model_.client_args
         )
 
         call_arg_names = LLMCallArgNames(
-            Model="modelId",
-            Messages="messages",
-            Max_Tokens=model_.Max_Token_Arg_Name,
+            model="modelId",
+            messages="messages",
+            max_tokens=model_.max_token_arg_name,
         )
 
         super().__init__(
-            Model=model_,
-            Func=client.converse,
-            AFunc=bedrock_async_wrapper(aclient),
-            Arg_Names=call_arg_names,
-            Defaults={},
-            Token_Window=model_.Token_Window,
-            Token_Limit_Completion=model_.Token_Limit_Completion,
+            model=model_,
+            func=client.converse,
+            afunc=bedrock_async_wrapper(aclient),
+            arg_names=call_arg_names,
+            defaults={},
+            token_window=model_.token_window,
+            token_limit_completion=model_.token_limit_completion,
         )
 
     def __del__(self):
@@ -88,7 +88,7 @@ class BedrockCaller(LLMCaller):
             messages, max_tokens, response_schema, **kwargs
         )
         inferenceConfig = {}
-        inferenceConfig["maxTokens"] = kwargs.pop(self.Args.Max_Tokens)
+        inferenceConfig["maxTokens"] = kwargs.pop(self.arg_names.max_tokens)
         for arg in ["temperature", "topP", "stopSequences"]:
             if arg in kwargs:
                 inferenceConfig[arg] = kwargs.pop(arg)
@@ -100,69 +100,69 @@ class BedrockCaller(LLMCaller):
 
     def format_message(self, message: LLMMessage):
         ### Handle tool results
-        if message.Role == "tool":
+        if message.role == "tool":
             return [
                 {
                     "role": "user",
                     "content": [
                         {
                             "toolResult": {
-                                "toolUseId": tc.ID,
+                                "toolUseId": tc.id,
                                 "content": [
                                     {
-                                        "text": tc.Response,
+                                        "text": tc.response,
                                     }
                                 ],
                                 "status": "success",
                             }
                         }
-                        for tc in message.ToolCalls
+                        for tc in message.tool_calls
                     ],
                 }
             ]
         ### Handle assistant tool calls messages
-        elif message.Role == "assistant" and message.ToolCalls is not None:
+        elif message.role == "assistant" and message.tool_calls is not None:
             return {
                 "role": "assistant",
                 "content": [
                     {
                         "toolUse": {
-                            "toolUseId": tc.ID,
-                            "name": tc.Name,
-                            "input": tc.Args,
+                            "toolUseId": tc.id,
+                            "name": tc.name,
+                            "input": tc.args,
                         }
                     }
-                    for tc in message.ToolCalls
+                    for tc in message.tool_calls
                 ],
             }
-        if message.Role == "user" and message.Images is not None:
-            if not self.Model.Vision:
+        if message.role == "user" and message.images is not None:
+            if not self.model.vision:
                 raise NotImplementedError(
-                    f"Tried to pass images but {self.Model.Name} doesn't support images"
+                    f"Tried to pass images but {self.model.name} doesn't support images"
                 )
-            for im in message.Images:
-                if im.Url and (im.Img is None):
+            for im in message.images:
+                if im.url and (im.img is None):
                     raise NotImplementedError(
                         "Bedrock API does not support images by URL"
                     )
             content = [
-                {"text": message.Message},
+                {"text": message.message},
                 *[
                     {
                         "image": {"format": "png", "source": {"bytes": im.get_bytes()}},
                     }
-                    for im in message.Images
+                    for im in message.images
                 ],
             ]
-            return {"role": message.Role, "content": content}
-        return {"role": message.Role, "content": [{"text": message.Message}]}
+            return {"role": message.role, "content": content}
+        return {"role": message.role, "content": [{"text": message.message}]}
 
     def format_messagelist(self, messagelist: List[LLMMessage]):
         out = []
         sysmsgs = []
         for message in messagelist:
-            if message.Role == "system":
-                sysmsgs.append({"text": message.Message})
+            if message.role == "system":
+                sysmsgs.append({"text": message.message})
             else:
                 outmsg = self.format_message(message)
                 if isinstance(outmsg, list):
@@ -170,9 +170,9 @@ class BedrockCaller(LLMCaller):
                 else:
                     out.append(outmsg)
         if sysmsgs:
-            self.Defaults["system"] = [sysmsgs[0]]
+            self.defaults["system"] = [sysmsgs[0]]
         else:
-            self.Defaults.pop("system", None)
+            self.defaults.pop("system", None)
         return out
 
     def format_tool(self, tool: Tool):
@@ -208,17 +208,17 @@ class BedrockCaller(LLMCaller):
                 tool_calls = [c["toolUse"] for c in content if "toolUse" in c]
                 tcs = [
                     LLMToolCall(
-                        ID=tc["toolUseId"],
-                        Name=tc["name"],
-                        Args=tc["input"],
+                        id=tc["toolUseId"],
+                        name=tc["name"],
+                        args=tc["input"],
                     )
                     for tc in tool_calls
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
+                return LLMMessage(role="assistant", tool_calls=tcs, latency=latency)
             else:
                 text = "".join([c["text"] for c in content if "text" in c]).lstrip()
                 # images = [c["image"] for c in content if "image" in c]
-                return LLMMessage(Role="assistant", Message=text, Latency=latency)
+                return LLMMessage(role="assistant", message=text, latency=latency)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenize_bedrock_messages(self.format_messagelist(messagelist))[0]

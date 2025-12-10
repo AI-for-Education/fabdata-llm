@@ -2,6 +2,8 @@
 
 FabData-LLM is a Python package that provides set of high-level abstractions around various LLM API providers. It currently covers OpenAI, Azure OpenAI, Anthropic, Azure Mistral AI, Google Vertex, Google GenAI, and Amazon Bedrock. It can also use any models exposed via an OpenAI compatible API (e.g. OpenRouter, FireWorks, etc.).  
 
+> Naming note: core models and message objects now expose snake_case attributes and constructor aliases (e.g., `LLMMessage(role=..., message=...)`). Legacy TitleCase names still work for backward compatibility during the deprecation window.
+
 ### Why you might consider using this
 
 - You want to create a chatbot with stored history and automatic history token management in 3 lines of code:

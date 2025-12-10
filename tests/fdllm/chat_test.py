@@ -46,9 +46,9 @@ class TESTPLUGIN(ChatPlugin):
 TEST_PROMPT_TEXT = "This is a user test"
 TEST_SYSTEM_TEXT = "This is a system test"
 TEST_OUTPUT_TEXT = "This is an output test"
-TEST_PROMPT_MESSAGE = LLMMessage(Role="user", Message=TEST_PROMPT_TEXT)
-TEST_SYSTEM_MESSAGE = LLMMessage(Role="system", Message=TEST_SYSTEM_TEXT)
-TEST_LLM_OUTPUT = LLMMessage(Role="assistant", Message=TEST_OUTPUT_TEXT)
+TEST_PROMPT_MESSAGE = LLMMessage(role="user", message=TEST_PROMPT_TEXT)
+TEST_SYSTEM_MESSAGE = LLMMessage(role="system", message=TEST_SYSTEM_TEXT)
+TEST_LLM_OUTPUT = LLMMessage(role="assistant", message=TEST_OUTPUT_TEXT)
 TEST_SYSMSG_FORMAT = {
     (0,): [TEST_SYSTEM_MESSAGE, TEST_PROMPT_MESSAGE],
     (-1,): [TEST_PROMPT_MESSAGE, TEST_SYSTEM_MESSAGE],

@@ -1,5 +1,6 @@
 import json
 import os
+import warnings
 from copy import copy, deepcopy
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -15,6 +16,35 @@ HERE = Path(__file__).parent
 basemodelfile = HERE / "models.yaml"
 
 logger = get_logger("sysutils")
+MODEL_KEY_ALIAS_MAP = {
+    "Api_Interface": "api_interface",
+    "Api_Key_Env_Var": "api_key_env_var",
+    "Api_Model_Name": "api_model_name",
+    "Max_Token_Arg_Name": "max_token_arg_name",
+    "Token_Window": "token_window",
+    "Token_Limit_Completion": "token_limit_completion",
+    "Client_Args": "client_args",
+    "Call_Args": "call_args",
+    "Extra_Body": "extra_body",
+    "Tool_Use": "tool_use",
+    "Vision": "vision",
+    "Flexible_SysMsg": "flexible_sysmsg",
+}
+
+
+def _normalize_model_keys(model_cfg: dict) -> dict:
+    """Normalize model config keys to snake_case while accepting legacy TitleCase."""
+    out = {}
+    for key, val in model_cfg.items():
+        norm_key = MODEL_KEY_ALIAS_MAP.get(key, key)
+        if norm_key != key:
+            warnings.warn(
+                f"Config key '{key}' is deprecated; use '{norm_key}' instead.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+        out[norm_key] = val
+    return out
 
 
 def deepmerge_dicts(dict1, dict2, copy_out=True):
@@ -54,7 +84,7 @@ def _parse_model_config_file(file: Union[str, os.PathLike]):
         config = yaml.safe_load(f)
 
     # standalone model defintions
-    models = config.pop("models", {})
+    models = {_name: _normalize_model_keys(_cfg) for _name, _cfg in config.pop("models", {}).items()}
 
     # grouped model definitions inherit group config
     for group_name, group_config in config.items():
@@ -62,7 +92,9 @@ def _parse_model_config_file(file: Union[str, os.PathLike]):
             # no models defined for this group, raise error?
             continue
         group_models = group_config.pop("models")
+        group_config = _normalize_model_keys(group_config)
         for model_name, model_config in group_models.items():
+            model_config = _normalize_model_keys(model_config)
             # model keys take priority (second overwrites first)
             models[model_name] = deepmerge_dicts(group_config, model_config)
             models[model_name]["group"] = group_name

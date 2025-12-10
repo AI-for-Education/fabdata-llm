@@ -107,9 +107,9 @@ class ToolUsePlugin(ChatPlugin):
 
     def register(self):
         super().register()
-        model = self.Controller.Caller.Model.Name
+        model = self.Controller.Caller.model.name
         modeltype = LLMModelType.get_type(model)(model)
-        if not modeltype.Tool_Use:
+        if not modeltype.tool_use:
             raise NotImplementedError(f"{model} doesn''t support tool use")
 
     def unregister(self):
@@ -117,24 +117,24 @@ class ToolUsePlugin(ChatPlugin):
 
     def _post_chat_appender(self, resp):
         controller = self.Controller
-        tc = copy.deepcopy(controller.History[-1].ToolCalls)
+        tc = copy.deepcopy(controller.History[-1].tool_calls)
         for i, resp_ in enumerate(resp):
-            tc[i].Response = resp_
-        controller.History.append(LLMMessage(Role="tool", ToolCalls=tc))
+            tc[i].response = resp_
+        controller.History.append(LLMMessage(role="tool", tool_calls=tc))
 
     async def post_achat(self, result: LLMMessage, *args, **kwargs):
-        self.Controller.Caller.Defaults.pop("tools")
-        if result.ToolCalls is None:
+        self.Controller.Caller.defaults.pop("tools")
+        if result.tool_calls is None:
             return result
         try:
             resp = []
             pass_through_idx = None
-            for idx, tc in enumerate(result.ToolCalls):
+            for idx, tc in enumerate(result.tool_calls):
                 ### call each tool
                 ### if we hit a pass_through tool, we note
                 ### it for later directly insterting into the chat
-                tool = self.tool_dict[tc.Name]
-                res = await tool._aexecute(**tc.Args)
+                tool = self.tool_dict[tc.name]
+                res = await tool._aexecute(**tc.args)
                 if tool.pass_through and pass_through_idx is None:
                     pass_through_idx = idx
                 resp.append(res)
@@ -142,8 +142,8 @@ class ToolUsePlugin(ChatPlugin):
             self._tool_attempt += 1
             self.Controller.History.pop()
             maybe_prompt = self.Controller.History.pop()
-            if maybe_prompt.Role == "user":
-                prompt = maybe_prompt.Message
+            if maybe_prompt.role == "user":
+                prompt = maybe_prompt.message
             else:
                 self.Controller.History.append(maybe_prompt)
                 prompt = ""
@@ -156,24 +156,24 @@ class ToolUsePlugin(ChatPlugin):
         if pass_through_idx is None:
             _, result = await self.Controller.achat("", *args, **kwargs)
         else:
-            result = LLMMessage(Role="assistant", Message=resp[pass_through_idx])
+            result = LLMMessage(role="assistant", message=resp[pass_through_idx])
             self.Controller.History.append(result)
         self._tool_attempt = 0
         return result
 
     def post_chat(self, result: LLMMessage, *args, **kwargs):
-        self.Controller.Caller.Defaults.pop("tools")
-        if result.ToolCalls is None:
+        self.Controller.Caller.defaults.pop("tools")
+        if result.tool_calls is None:
             return result
         try:
             resp = []
             pass_through_idx = None
-            for idx, tc in enumerate(result.ToolCalls):
+            for idx, tc in enumerate(result.tool_calls):
                 ### call each tool
                 ### if we hit a pass_through tool, we note
                 ### it for later directly insterting into the chat
-                tool = self.tool_dict[tc.Name]
-                res = tool._execute(**tc.Args)
+                tool = self.tool_dict[tc.name]
+                res = tool._execute(**tc.args)
                 if tool.pass_through and pass_through_idx is None:
                     pass_through_idx = idx
                 resp.append(res)
@@ -181,8 +181,8 @@ class ToolUsePlugin(ChatPlugin):
             self._tool_attempt += 1
             self.Controller.History.pop()
             maybe_prompt = self.Controller.History.pop()
-            if maybe_prompt.Role == "user":
-                prompt = maybe_prompt.Message
+            if maybe_prompt.role == "user":
+                prompt = maybe_prompt.message
             else:
                 self.Controller.History.append(maybe_prompt)
                 prompt = ""
@@ -196,7 +196,7 @@ class ToolUsePlugin(ChatPlugin):
         if pass_through_idx is None:
             _, result = self.Controller.chat("", *args, **kwargs)
         else:
-            result = LLMMessage(Role="assistant", Message=resp[pass_through_idx])
+            result = LLMMessage(role="assistant", message=resp[pass_through_idx])
             self.Controller.History.append(result)
         self._tool_attempt = 0
         return result
@@ -205,7 +205,7 @@ class ToolUsePlugin(ChatPlugin):
         return self.pre_chat(prompt, *args, **kwargs)
 
     def pre_chat(self, prompt: str, *args, **kwargs):
-        self.Controller.Caller.Defaults["tools"] = self.format_tools()
+        self.Controller.Caller.defaults["tools"] = self.format_tools()
 
     def format_tools(self):
         return self.Controller.Caller.format_tools(self.Tools)

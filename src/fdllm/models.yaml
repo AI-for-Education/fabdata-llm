@@ -1,315 +1,136 @@
 OpenAI:
-  Api_Interface: OpenAI
+  api_interface: OpenAI
+  api_key_env_var: OPENAI_API_KEY
   models:
     gpt-3.5-turbo:
-      Token_Window: 4096
+      token_window: 4096
     gpt-3.5-turbo-0301:
-      Token_Window: 4096
+      token_window: 4096
     gpt-3.5-turbo-0613:
-      Token_Window: 4096
+      token_window: 4096
     gpt-3.5-turbo-1106:
-      Token_Window: 16385
-      Token_Limit_Completion: 4096
-      Tool_Use: True
+      token_window: 16385
+      token_limit_completion: 4096
+      tool_use: True
     gpt-3.5-turbo-0125:
-      Token_Window: 16385
-      Token_Limit_Completion: 4096
-      Tool_Use: True
+      token_window: 16385
+      token_limit_completion: 4096
+      tool_use: True
     gpt-4:
-      Token_Window: 8192
+      token_window: 8192
     gpt-4-0314:
-      Token_Window: 8192
+      token_window: 8192
     gpt-4-0613:
-      Token_Window: 8192
+      token_window: 8192
     gpt-4-1106-preview:
-      Token_Window: 128000
-      Token_Limit_Completion: 4096
-      Tool_Use: True
+      token_window: 128000
+      token_limit_completion: 4096
+      tool_use: True
     gpt-4-0125-preview:
-      Token_Window: 128000
-      Token_Limit_Completion: 4096
-      Tool_Use: True
+      token_window: 128000
+      token_limit_completion: 4096
+      tool_use: True
     gpt-4-turbo-2024-04-09:
-      Token_Window: 128000
-      Token_Limit_Completion: 4096
-      Tool_Use: True
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 4096
+      tool_use: True
+      vision: True
     gpt-4-turbo:
-      Token_Window: 128000
-      Token_Limit_Completion: 4096
-      Tool_Use: True
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 4096
+      tool_use: True
+      vision: True
     gpt-4o-mini-2024-07-18:
-      Token_Window: 128000
-      Token_Limit_Completion: 16384
-      Tool_Use: True
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 16384
+      tool_use: True
+      vision: True
     gpt-4o-2024-05-13:
-      Token_Window: 128000
-      Token_Limit_Completion: 4096
-      Tool_Use: True
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 4096
+      tool_use: True
+      vision: True
     gpt-4o-2024-08-06:
-      Token_Window: 128000
-      Token_Limit_Completion: 16384
-      Tool_Use: True
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 16384
+      tool_use: True
+      vision: True
     o1-preview-2024-09-12:
-      Token_Window: 128000
-      Token_Limit_Completion: 32768
-      Tool_Use: False
-      Vision: False
+      token_window: 128000
+      token_limit_completion: 32768
+      tool_use: False
+      vision: False
     o1-2024-12-17:
-      Token_Window: 200000
-      Token_Limit_Completion: 100000
-      Tool_Use: True
-      Vision: True
+      token_window: 200000
+      token_limit_completion: 100000
+      tool_use: True
+      vision: True
     o1:
-      Token_Window: 200000
-      Token_Limit_Completion: 100000
-      Tool_Use: True
-      Vision: True
+      token_window: 200000
+      token_limit_completion: 100000
+      tool_use: True
+      vision: True
     o1-preview:
-      Token_Window: 128000
-      Token_Limit_Completion: 32768
-      Tool_Use: False
-      Vision: False
+      token_window: 128000
+      token_limit_completion: 32768
+      tool_use: False
+      vision: False
     o1-mini-2024-09-12:
-      Token_Window: 128000
-      Token_Limit_Completion: 65536
-      Tool_Use: False
-      Vision: False
+      token_window: 128000
+      token_limit_completion: 65536
+      tool_use: False
+      vision: False
     o1-mini:
-      Token_Window: 128000
-      Token_Limit_Completion: 65536
-      Tool_Use: False
-      Vision: False
+      token_window: 128000
+      token_limit_completion: 65536
+      tool_use: False
+      vision: False
     gpt-4o-mini:
-      Token_Window: 128000
-      Token_Limit_Completion: 16384
-      Tool_Use: True
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 16384
+      tool_use: True
+      vision: True
     gpt-4o:
-      Token_Window: 128000
-      Token_Limit_Completion: 16384
-      Tool_Use: True
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 16384
+      tool_use: True
+      vision: True
     gpt-4-vision-preview:
-      Token_Window: 128000
-      Token_Limit_Completion: 4096
-      Vision: True
+      token_window: 128000
+      token_limit_completion: 4096
+      vision: True
 
 OpenAI_O3_Family:
-  Api_Interface: OpenAI
-  Token_Window: 200000
-  Token_Limit_Completion: 100000
-  Tool_Use: True
-  Vision: True
+  api_interface: OpenAI
+  api_key_env_var: OPENAI_API_KEY
+  token_window: 200000
+  token_limit_completion: 100000
+  tool_use: True
+  vision: True
   models:
     o3-mini-2025-01-31: {}
     o3-mini: {}
     o3-mini-low:
-      Api_Model_Name: o3-mini
-      Call_Args:
+      api_model_name: o3-mini
+      call_args:
         reasoning_effort: low
     o3-mini-medium:
-      Api_Model_Name: o3-mini
-      Call_Args:
+      api_model_name: o3-mini
+      call_args:
         reasoning_effort: medium
     o3-mini-high:
-      Api_Model_Name: o3-mini
-      Call_args:
+      api_model_name: o3-mini
+      call_args:
         reasoning_effort: high
-    o3-mini-2025-01-31-low:
-      Api_Model_Name: o3-mini-2025-01-31
-      Call_Args:
-        reasoning_effort: low
-    o3-mini-2025-01-31-medium:
-      Api_Model_Name: o3-mini-2025-01-31
-      Call_Args:
-        reasoning_effort: medium
-    o3-mini-2025-01-31-high:
-      Api_Model_Name: o3-mini-2025-01-31
-      Call_Args:
-        reasoning_effort: high
-
-Anthropic_Thinking:
-  Api_Interface: Anthropic
-  Max_Token_Arg_Name: max_tokens
-  Flexible_SysMsg: False
-  Token_Window: 200000
-  Token_Limit_Completion: 128000
-  Tool_Use: False
-  Vision: True
-  models:
-    claude-3-7-sonnet-latest-high:
-      Api_Model_Name: claude-3-7-sonnet-latest
-      Call_Args:
-        timeout: 20
-        betas: ["output-128k-2025-02-19"]
-        thinking:
-          type: enabled
-          budget_tokens: 64000
-    claude-3-7-sonnet-latest-medium:
-      Api_Model_Name: claude-3-7-sonnet-latest
-      Call_Args:
-        timeout: 20
-        betas: ["output-128k-2025-02-19"]
-        thinking:
-          type: enabled
-          budget_tokens: 32000
-    claude-3-7-sonnet-latest-low:
-      Api_Model_Name: claude-3-7-sonnet-latest
-      Call_Args:
-        timeout: 20
-        betas: ["output-128k-2025-02-19"]
-        thinking:
-          type: enabled
-          budget_tokens: 16000
 
 Anthropic:
-  Api_Interface: Anthropic
-  Max_Token_Arg_Name: max_tokens
-  Flexible_SysMsg: False
-  Token_Window: 200000
-  Tool_Use: True
-  Vision: True
+  api_interface: Anthropic
+  api_key_env_var: ANTHROPIC_API_KEY
+  token_window: 200000
+  token_limit_completion: 100000
+  tool_use: True
+  vision: False
   models:
-    claude-3-7-sonnet-latest:
-      Token_Limit_Completion: 8192
-    claude-3-5-sonnet-latest:
-      Token_Limit_Completion: 8192
-    claude-3-5-sonnet-20241022:
-      Token_Limit_Completion: 8192
-    claude-3-5-sonnet-20240620:
-      Token_Limit_Completion: 8192
-    claude-3-5-haiku-latest:
-      Token_Limit_Completion: 8192
-    claude-3-5-haiku-20241022:
-      Token_Limit_Completion: 8192
-    claude-3-opus-latest:
-      Token_Limit_Completion: 4096
-    claude-3-opus-20240229:
-      Token_Limit_Completion: 4096
-    claude-3-sonnet-20240229:
-      Token_Limit_Completion: 4096
     claude-3-haiku-20240307:
-      Token_Limit_Completion: 4096
-
-AnthropicLegacy:
-  Api_Interface: Anthropic
-  Flexible_SysMsg: False
-  Token_Limit_Completion: 4096
-  models:
-    claude-2.0:
-      Token_Window: 100000
-    claude-2.1:
-      Token_Window: 200000
-
-VertexAI:
-  Api_Interface: VertexAI
-  Token_Limit_Completion: 8192
-  Flexible_SysMsg: True
-  Tool_Use: True
-  Vision: True
-  models:
-    vtx-gemini-1.5-flash-001:
-      Api_Model_Name: google/gemini-1.5-flash-001
-      Token_Window: 1048576
-    vtx-gemini-1.5-pro-001:
-      Api_Model_Name: google/gemini-1.5-pro-001
-      Token_Window: 2097152
-    vtx-gemini-1.0-pro-001:
-      Api_Model_Name: google/gemini-1.0-pro-001
-      Token_Window: 32760
-      Vision: False
-    vtx-gemini-1.0-pro-002:
-      Api_Model_Name: google/gemini-1.0-pro-002
-      Token_Window: 32760
-      Vision: False
-    vtx-gemini-1.0-pro-vision-001:
-      Api_Model_Name: google/gemini-1.0-pro-vision-001
-      Token_Window: 16384
-      Token_Limit_Completion: 2048
-
-Fireworks:
-  Api_Interface: OpenAI
-  Max_Token_Arg_Name: max_tokens
-  Token_Window: 128000
-  Api_Key_Env_Var: FIREWORKS_API_KEY
-  Client_Args:
-    base_url: https://api.fireworks.ai/inference/v1
-  models:
-    fw-llama-v3p2-1b-instruct:
-      Api_Model_Name: accounts/fireworks/models/llama-v3p2-1b-instruct
-    fw-llama-v3p2-3b-instruct:
-      Api_Model_Name: accounts/fireworks/models/llama-v3p2-3b-instruct
-    fw-llama-v3p2-11b-vision-instruct:
-      Api_Model_Name: accounts/fireworks/models/llama-v3p2-11b-vision-instruct
-    fw-llama-v3p2-90b-vision-instruct:
-      Api_Model_Name: accounts/fireworks/models/llama-v3p2-90b-vision-instruct
-    fw-llama-v3p1-70b-instruct:
-      Api_Model_Name: accounts/fireworks/models/llama-v3p1-70b-instruct
-    fw-llama-v3p1-405b-instruct:
-      Api_Model_Name: accounts/fireworks/models/llama-v3p1-405b-instruct
-    fw-qwen2p5-72b:
-      Api_Model_Name: accounts/fireworks/models/qwen2p5-72b
-    fw-qwen2p5-72b-instruct:
-      Api_Model_Name: accounts/fireworks/models/qwen2p5-72b-instruct
-    fw-qwen2p5-14b-instruct:
-      Api_Model_Name: accounts/fireworks/models/qwen2p5-14b-instruct
-    fw-mixtral-8x22b-instruct:
-      Api_Model_Name: accounts/fireworks/models/mixtral-8x22b-instruct
-    fw-mixtral-8x7b-instruct:
-      Api_Model_Name: accounts/fireworks/models/mixtral-8x7b-instruct
-    fw-mixtral-8x7b-instruct-hf:
-      Api_Model_Name: accounts/fireworks/models/mixtral-8x7b-instruct-hf
-    fw-yi-large:
-      Api_Model_Name: accounts/yi-01-ai/models/yi-large
-
-AmazonBedrock:
-  Api_Interface: Bedrock
-  Api_Key_Env_Var: AWS_API_KEYS
-  Client_Args:
-    region_name: us-east-1
-  Token_Window: 30000
-  Vision: True
-  models:
-    "amazon.nova-pro-v1:0": {}
-    "amazon.nova-lite-v1:0": {}
-    "amazon.nova-micro-v1:0":
-      Vision: False
-      Token_Window: 128000
-
-Google:
-  Api_Interface: GoogleGenAI
-  Max_Token_Arg_Name: max_output_tokens
-  Api_Key_Env_Var: GEMINI_API_KEY
-  Vision: True
-  Tool_Use: True
-  Token_Window: 1048576
-  Token_Limit_Completion: 8192
-  models:
-    gemini-2.0-flash-exp:
-      Api_Model_Name: models/gemini-2.0-flash-exp
-    gemini-1.5-flash:
-      Api_Model_Name: models/gemini-1.5-flash
-    gemini-1.5-flash-8b:
-      Api_Model_Name: models/gemini-1.5-flash-8b
-    gemini-1.5-pro:
-      Api_Model_Name: models/gemini-1.5-pro
-      Token_Window: 2097152
-    gemini-exp-1206: {}
-    gemini-2.0-flash-thinking-exp-1219: {}
-    learnlm-1.5-pro-experimental: {}
-
-OpenAICompletions:
-  Api_Interface: OpenAICompletions
-  Token_Window: 4096
-  Token_Limit_Completion: 4096
-  Tool_Use: False
-  Vision: False
-  models:
-    davinci-002:
-      Token_Window: 4096
-      Token_Limit_Completion: 4096
+      token_window: 200000
+      token_limit_completion: 100000
