@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import patch
-from unittest import mock
-from types import SimpleNamespace
 from itertools import product
 from typing import List
+from pathlib import Path
 
-from pydantic import PrivateAttr, Field
+from dotenv import load_dotenv
+from pydantic import Field
 
 from fdllm import get_caller
 from fdllm.chat import ChatController
@@ -18,6 +18,11 @@ from fdllm.tooluse import (
     ToolMissingParamError,
 )
 
+HERE = Path(__file__).resolve().parent
+TEST_ROOT = HERE
+
+load_dotenv(TEST_ROOT / "test.env", override=True)
+
 
 class TESTTOOL1(Tool):
     name = "mul"
@@ -29,7 +34,7 @@ class TESTTOOL1(Tool):
 
     def execute(self, **params):
         res = params["x"] * params["y"]
-        return f"{res :.4f}"
+        return f"{res:.4f}"
 
     async def aexecute(self, **params):
         return self.execute()
@@ -45,7 +50,7 @@ class TESTTOOL2(Tool):
 
     def execute(self, **params):
         res = params["x"] + params["y"]
-        return f"{res :.4f}"
+        return f"{res:.4f}"
 
     async def aexecute(self, **params):
         return self.execute()
@@ -111,13 +116,19 @@ def test_toolcall(toolstr: str, caller: str, test_over):
         nreps = 0
     controller = ChatController(Caller=caller)
     controller.register_plugin(plugin)
-    with patch(
-        f"{caller.__class__.__module__}.{caller.__class__.__name__}.call",
-        side_effect=[
-            *[TEST_TOOL_CALL_OUTPUTS[toolstr]] * nreps,
-            TEST_TOOL_CALL_OUTPUTS[validstr],
-            TEST_LLM_OUTPUT,
-        ],
+    with (
+        patch(
+            f"{caller.__class__.__module__}.{caller.__class__.__name__}.call",
+            side_effect=[
+                *[TEST_TOOL_CALL_OUTPUTS[toolstr]] * nreps,
+                TEST_TOOL_CALL_OUTPUTS[validstr],
+                TEST_LLM_OUTPUT,
+            ],
+        ),
+        patch(
+            f"{caller.__class__.__module__}.{caller.__class__.__name__}.count_tokens",
+            return_value=1,
+        ),
     ):
         try:
             new_message, result = controller.chat(TEST_PROMPT_TEXT)

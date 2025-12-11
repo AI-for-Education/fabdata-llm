@@ -2,6 +2,8 @@ import pytest
 from types import SimpleNamespace
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from fdllm import OpenAICaller
 from fdllm.llmtypes import LLMMessage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
@@ -9,6 +11,8 @@ from fdllm.sysutils import register_models
 
 HERE = Path(__file__).resolve().parent
 TEST_ROOT = HERE.parent
+
+load_dotenv(TEST_ROOT / "test.env", override=True)
 
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"

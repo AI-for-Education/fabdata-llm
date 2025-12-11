@@ -1,8 +1,16 @@
 import pytest
 from types import SimpleNamespace
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from fdllm import ClaudeCaller
 from fdllm.llmtypes import LLMMessage
+
+HERE = Path(__file__).resolve().parent
+TEST_ROOT = HERE.parent
+
+load_dotenv(TEST_ROOT / "test.env", override=True)
 
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"
