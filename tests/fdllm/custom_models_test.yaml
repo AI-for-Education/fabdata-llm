@@ -9,6 +9,17 @@ Google:
       Token_Window: 1048576
       Token_Limit_Completion: 8192
 
+OpenAICompletions:
+  Api_Interface: OpenAICompletions
+  Token_Window: 4096
+  Token_Limit_Completion: 4096
+  Tool_Use: False
+  Vision: False
+  models:
+    text-davinci-003:
+      Token_Window: 4096
+      Token_Limit_Completion: 4096
+
 OpenAIBenchmarks:
   Api_Interface: OpenAI
   Token_Window: 200000
