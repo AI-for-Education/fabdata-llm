@@ -188,7 +188,15 @@ class ClaudeCaller(LLMCaller):
                             Latency=latency,
                             **token_count_kwargs,
                         )
-                        content = [[], content]
+                        # Process ALL content items as tool calls
+                        out.ToolCalls = []
+                        for tcout in content:
+                            tc = LLMToolCall(
+                                ID=tcout.id,
+                                Name=tcout.name,
+                                Args=tcout.input,
+                            )
+                            out.ToolCalls.append(tc)
                 else:
                     out = LLMMessage(
                         Role="assistant",
@@ -196,15 +204,16 @@ class ClaudeCaller(LLMCaller):
                         Latency=latency,
                         **token_count_kwargs,
                     )
-                if len(content) > 1:
-                    out.ToolCalls = []
-                    for tcout in output.content[1:]:
-                        tc = LLMToolCall(
-                            ID=tcout.id,
-                            Name=tcout.name,
-                            Args=tcout.input,
-                        )
-                    out.ToolCalls.append(tc)
+                    # Process tool blocks after the first text block
+                    if len(content) > 1:
+                        out.ToolCalls = []
+                        for tcout in content[1:]:
+                            tc = LLMToolCall(
+                                ID=tcout.id,
+                                Name=tcout.name,
+                                Args=tcout.input,
+                            )
+                            out.ToolCalls.append(tc)
             return out
 
     def format_tool(self, tool: Tool):
