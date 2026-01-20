@@ -1,3 +1,6 @@
+[![codecov](https://codecov.io/gh/AI-for-Education/fabdata-llm/graph/badge.svg)](https://codecov.io/gh/AI-for-Education/fabdata-llm)
+[![Tests](https://github.com/AI-for-Education/fabdata-llm/actions/workflows/test.yml/badge.svg)](https://github.com/AI-for-Education/fabdata-llm/actions/workflows/test.yml)
+
 ## Introduction
 
 FabData-LLM is a Python package that provides set of high-level abstractions around various LLM API providers. It currently covers OpenAI, Azure OpenAI, Anthropic, Azure Mistral AI, Google Vertex, Google GenAI, and Amazon Bedrock. It can also use any models exposed via an OpenAI compatible API (e.g. OpenRouter, FireWorks, etc.).  
