@@ -35,3 +35,31 @@ OpenAIBenchmarks:
       Api_Model_Name: gpt-4.1-2025-04-14
       Token_Window: 1047576
       Token_Limit_Completion: 32768
+
+AzureMistral:
+  Api_Interface: AzureMistralAI
+  Token_Window: 32000
+  Token_Limit_Completion: 8192
+  Tool_Use: True
+  Vision: False
+  models:
+    mistral-large-azure:
+      Token_Window: 32000
+      Token_Limit_Completion: 8192
+
+Bedrock:
+  Api_Interface: Bedrock
+  Token_Window: 200000
+  Token_Limit_Completion: 4096
+  Tool_Use: True
+  Vision: False
+  models:
+    bedrock-claude-sonnet:
+      Api_Model_Name: anthropic.claude-3-sonnet-20240229-v1:0
+      Token_Window: 200000
+      Token_Limit_Completion: 4096
+    bedrock-claude-sonnet-vision:
+      Api_Model_Name: anthropic.claude-3-sonnet-20240229-v1:0
+      Token_Window: 200000
+      Token_Limit_Completion: 4096
+      Vision: True
