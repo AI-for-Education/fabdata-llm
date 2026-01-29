@@ -21,6 +21,7 @@ from ..llmtypes import (
     LLMModelType,
     LLMMessage,
     LLMToolCall,
+    LLMDocument,
 )
 from ..tooluse import Tool
 from ..decorators import delayedretry
@@ -94,30 +95,55 @@ class ClaudeCaller(LLMCaller):
                     }
                 )
             return out
-        elif message.Role == "user" and message.Images is not None:
-            if not self.Model.Vision:
-                raise NotImplementedError(
-                    f"Tried to pass images but {self.Model.Name} doesn't support images"
-                )
-            for im in message.Images:
-                if im.Url and (im.Img is None):
+        elif message.Role == "user" and (
+            message.Documents is not None or message.Images is not None
+        ):
+            content = []
+
+            # Add documents
+            if message.Documents is not None:
+                if not self.Model.Document:
                     raise NotImplementedError(
-                        "Anthropic API does not support images by URL"
+                        f"Tried to pass documents but {self.Model.Name} doesn't support documents"
                     )
-            content = [
-                *[
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": im.encode(),
-                        },
-                    }
-                    for im in message.Images
-                ],
-                {"type": "text", "text": message.Message},
-            ]
+                for doc in message.Documents:
+                    content.append(
+                        {
+                            "type": "document",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "application/pdf",
+                                "data": doc.encode(),
+                            },
+                        }
+                    )
+
+            # Add images
+            if message.Images is not None:
+                if not self.Model.Vision:
+                    raise NotImplementedError(
+                        f"Tried to pass images but {self.Model.Name} doesn't support images"
+                    )
+                for im in message.Images:
+                    if im.Url and (im.Img is None):
+                        raise NotImplementedError(
+                            "Anthropic API does not support images by URL"
+                        )
+                    content.append(
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": im.encode(),
+                            },
+                        }
+                    )
+
+            # Add text
+            if message.Message:
+                content.append({"type": "text", "text": message.Message})
+
             return {"role": message.Role, "content": content}
         else:
             return {"role": message.Role, "content": message.Message}

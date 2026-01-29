@@ -34,26 +34,31 @@ OpenAI:
       Token_Limit_Completion: 4096
       Tool_Use: True
       Vision: True
+      Document: True
     gpt-4-turbo:
       Token_Window: 128000
       Token_Limit_Completion: 4096
       Tool_Use: True
       Vision: True
+      Document: True
     gpt-4o-mini-2024-07-18:
       Token_Window: 128000
       Token_Limit_Completion: 16384
       Tool_Use: True
       Vision: True
+      Document: True
     gpt-4o-2024-05-13:
       Token_Window: 128000
       Token_Limit_Completion: 4096
       Tool_Use: True
       Vision: True
+      Document: True
     gpt-4o-2024-08-06:
       Token_Window: 128000
       Token_Limit_Completion: 16384
       Tool_Use: True
       Vision: True
+      Document: True
     o1-preview-2024-09-12:
       Token_Window: 128000
       Token_Limit_Completion: 32768
@@ -64,11 +69,13 @@ OpenAI:
       Token_Limit_Completion: 100000
       Tool_Use: True
       Vision: True
+      Document: True
     o1:
       Token_Window: 200000
       Token_Limit_Completion: 100000
       Tool_Use: True
       Vision: True
+      Document: True
     o1-preview:
       Token_Window: 128000
       Token_Limit_Completion: 32768
@@ -89,11 +96,13 @@ OpenAI:
       Token_Limit_Completion: 16384
       Tool_Use: True
       Vision: True
+      Document: True
     gpt-4o:
       Token_Window: 128000
       Token_Limit_Completion: 16384
       Tool_Use: True
       Vision: True
+      Document: True
     gpt-4-vision-preview:
       Token_Window: 128000
       Token_Limit_Completion: 4096
@@ -105,6 +114,7 @@ OpenAI_O3_Family:
   Token_Limit_Completion: 100000
   Tool_Use: True
   Vision: True
+  Document: True
   models:
     o3-mini-2025-01-31: {}
     o3-mini: {}
@@ -141,6 +151,7 @@ Anthropic_Thinking:
   Token_Limit_Completion: 128000
   Tool_Use: False
   Vision: True
+  Document: True
   models:
     claude-3-7-sonnet-latest-high:
       Api_Model_Name: claude-3-7-sonnet-latest
@@ -174,6 +185,7 @@ Anthropic:
   Token_Window: 200000
   Tool_Use: True
   Vision: True
+  Document: True
   models:
     claude-3-7-sonnet-latest:
       Token_Limit_Completion: 8192
@@ -287,6 +299,7 @@ Google:
   Api_Key_Env_Var: GEMINI_API_KEY
   Vision: True
   Tool_Use: True
+  Document: True
   Token_Window: 1048576
   Token_Limit_Completion: 8192
   models:
