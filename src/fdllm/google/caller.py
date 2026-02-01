@@ -9,7 +9,7 @@ from openai.types.chat.chat_completion_token_logprob import (
     ChatCompletionTokenLogprob,
 )
 
-from ..llmtypes import LLMCallArgNames, LLMCaller, LLMDocument, LLMMessage, LLMModelType, LLMToolCall
+from ..llmtypes import LLMCallArgNames, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
 from ..tooluse import Tool
 
 
