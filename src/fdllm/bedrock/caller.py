@@ -88,7 +88,7 @@ class BedrockCaller(LLMCaller):
             messages, max_tokens, response_schema, **kwargs
         )
         inferenceConfig = {}
-        inferenceConfig["maxTokens"] = kwargs.pop(self.Args.Max_Tokens)
+        inferenceConfig["maxTokens"] = kwargs.pop(self.Arg_Names.Max_Tokens)
         for arg in ["temperature", "topP", "stopSequences"]:
             if arg in kwargs:
                 inferenceConfig[arg] = kwargs.pop(arg)
