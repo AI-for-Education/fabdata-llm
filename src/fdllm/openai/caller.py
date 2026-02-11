@@ -28,6 +28,7 @@ from ..llmtypes import (
     LLMModelType,
     LLMMessage,
     LLMToolCall,
+    LLMDocument,
 )
 from ..tooluse import Tool
 
@@ -86,29 +87,54 @@ class OpenAICaller(LLMCaller):
                     for tc in message.ToolCalls
                 ],
             }
-        ### Handle user messages which contain images
-        elif message.Role == "user" and message.Images is not None:
-            if not self.Model.Vision:
-                raise NotImplementedError(
-                    f"Tried to pass images but {self.Model.Name} doesn't support images"
-                )
-            content = [
-                *[
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": (
-                                im.Url
-                                if im.Url is not None
-                                else f"data:image/png;base64,{im.encode()}"
-                            ),
-                            "detail": im.Detail,
-                        },
-                    }
-                    for im in message.Images
-                ],
-                {"type": "text", "text": message.Message},
-            ]
+        ### Handle user messages which contain documents and/or images
+        elif message.Role == "user" and (
+            message.Documents is not None or message.Images is not None
+        ):
+            content = []
+
+            # Add documents first
+            if message.Documents is not None:
+                if not self.Model.Document:
+                    raise NotImplementedError(
+                        f"Tried to pass documents but {self.Model.Name} doesn't support documents"
+                    )
+                for doc in message.Documents:
+                    content.append(
+                        {
+                            "type": "file",
+                            "file": {
+                                "filename": doc.get_filename(),
+                                "file_data": f"data:application/pdf;base64,{doc.encode()}",
+                            },
+                        }
+                    )
+
+            # Add images
+            if message.Images is not None:
+                if not self.Model.Vision:
+                    raise NotImplementedError(
+                        f"Tried to pass images but {self.Model.Name} doesn't support images"
+                    )
+                for im in message.Images:
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": (
+                                    im.Url
+                                    if im.Url is not None
+                                    else f"data:image/png;base64,{im.encode()}"
+                                ),
+                                "detail": im.Detail,
+                            },
+                        }
+                    )
+
+            # Add text
+            if message.Message:
+                content.append({"type": "text", "text": message.Message})
+
             return {"role": message.Role, "content": content}
         elif message.Role == "system" and (
             self.Model.Name.startswith(("o1-2024", "o3")) or self.Model.Name == "o1"

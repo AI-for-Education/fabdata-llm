@@ -63,6 +63,7 @@ class LLMModelType(BaseModel):
     Extra_Body: dict = Field(default_factory=dict)
     Tool_Use: bool = False
     Vision: bool = False
+    Document: bool = False
     Flexible_SysMsg: bool = True
     _default_client_args = {}
 
@@ -175,6 +176,7 @@ class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "tool", "error"]
     Message: Optional[str] = None
     Images: Optional[List[LLMImage]] = None
+    Documents: Optional[List[LLMDocument]] = None
     ToolCalls: Optional[List[LLMToolCall]] = None
     TokensUsed: Optional[int] = None
     TokensUsedCompletion: Optional[int] = None
@@ -273,6 +275,44 @@ class LLMImage(BaseModel):
         self.Img = im
 
     model_config = {"arbitrary_types_allowed": True}
+
+
+class LLMDocument(BaseModel):
+    Path_: Optional[Path] = Field(None, alias="Path")
+    Data: Optional[bytes] = None
+    Filename: Optional[str] = None
+
+    model_config = {"arbitrary_types_allowed": True, "populate_by_name": True}
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._load_if_path()
+
+    def _load_if_path(self):
+        """Load PDF data from path if provided."""
+        if self.Path_ is not None and self.Data is None:
+            self.Data = self.Path_.read_bytes()
+            if self.Filename is None:
+                self.Filename = self.Path_.name
+
+    def encode(self) -> str:
+        """Return base64-encoded PDF data."""
+        if self.Data is None:
+            raise ValueError("No document data available")
+        return base64.b64encode(self.Data).decode("utf-8")
+
+    def get_filename(self) -> str:
+        """Return filename, defaulting to 'document.pdf'."""
+        return self.Filename or "document.pdf"
+
+    @classmethod
+    def list_from_paths(
+        cls, paths: Optional[List[Path]]
+    ) -> Optional[List["LLMDocument"]]:
+        """Convenience method to create documents from a list of paths."""
+        if paths is None:
+            return None
+        return [cls(Path=p) for p in paths]
 
 
 @dataclass(config=ConfigDict(validate_assignment=True))
@@ -497,3 +537,4 @@ class LiteralCaller(LLMCaller):
 
 
 LLMMessage.model_rebuild()
+LLMDocument.model_rebuild()

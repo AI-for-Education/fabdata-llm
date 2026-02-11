@@ -79,24 +79,48 @@ class GoogleGenAICaller(LLMCaller):
                     for tc in message.ToolCalls
                 ],
             }
-        ### Handle user messages which contain images
-        elif message.Role == "user" and message.Images is not None:
-            if not self.Model.Vision:
-                raise NotImplementedError(
-                    f"Tried to pass images but {self.Model.Name} doesn't support images"
-                )
-            content = [
-                *[
-                    {
-                        "inline_data": {
-                            "data": im.get_bytes(),
-                            "mime_type": "image/png",
-                        },
-                    }
-                    for im in message.Images
-                ],
-                {"text": message.Message},
-            ]
+        ### Handle user messages which contain documents and/or images
+        elif message.Role == "user" and (
+            message.Documents is not None or message.Images is not None
+        ):
+            content = []
+
+            # Add documents
+            if message.Documents is not None:
+                if not self.Model.Document:
+                    raise NotImplementedError(
+                        f"Tried to pass documents but {self.Model.Name} doesn't support documents"
+                    )
+                for doc in message.Documents:
+                    content.append(
+                        {
+                            "inline_data": {
+                                "data": doc.encode(),
+                                "mime_type": "application/pdf",
+                            },
+                        }
+                    )
+
+            # Add images
+            if message.Images is not None:
+                if not self.Model.Vision:
+                    raise NotImplementedError(
+                        f"Tried to pass images but {self.Model.Name} doesn't support images"
+                    )
+                for im in message.Images:
+                    content.append(
+                        {
+                            "inline_data": {
+                                "data": im.get_bytes(),
+                                "mime_type": "image/png",
+                            },
+                        }
+                    )
+
+            # Add text
+            if message.Message:
+                content.append({"text": message.Message})
+
             return {"role": message.Role, "parts": content}
         else:
             role = message.Role
