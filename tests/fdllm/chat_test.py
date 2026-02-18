@@ -1,22 +1,26 @@
 import pytest
 from unittest.mock import patch
-from types import SimpleNamespace
-from itertools import product
 from typing import List
 from pathlib import Path
 
 from pydantic import PrivateAttr
+from dotenv import load_dotenv
 
 from fdllm.chat import ChatController, ChatPlugin
 from fdllm import OpenAICaller, ClaudeCaller, GoogleGenAICaller
 from fdllm.llmtypes import LLMMessage
-from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.sysutils import register_models
 from fdllm.constants import LLM_DEFAULT_MAX_TOKENS
 
-register_models(Path.home() / ".fdllm/custom_models.yaml")
+HERE = Path(__file__).resolve().parent
+TEST_ROOT = HERE
+
+load_dotenv(TEST_ROOT / "test.env", override=True)
+
+register_models(TEST_ROOT / "custom_models_test.yaml")
 
 TEST_PLUGIN_SYSMSG = {0: "A", -1: "B", -2: "C"}
+
 
 class TESTPLUGIN(ChatPlugin):
     Restore_Attrs: List[str] = ["Sys_Msg"]
@@ -27,11 +31,11 @@ class TESTPLUGIN(ChatPlugin):
 
     async def pre_achat(self, prompt: str, *args, **kwargs):
         self.Controller.Sys_Msg = TEST_PLUGIN_SYSMSG
-    
+
     def post_chat(self, result: LLMMessage, *args, **kwargs):
         self._history = self.Controller.History.copy()
         return result
-    
+
     async def post_achat(self, result: LLMMessage, *args, **kwargs):
         self._history = self.Controller.History.copy()
         return result
@@ -84,7 +88,10 @@ TEST_CALLERS = [OpenAICaller, ClaudeCaller, GoogleGenAICaller]
 )
 def test_chat(caller, retval):
     controller = ChatController(Caller=caller())
-    with patch(f"{caller.__module__}.{caller.__name__}.call", return_value=retval):
+    with (
+        patch(f"{caller.__module__}.{caller.__name__}.call", return_value=retval),
+        patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1),
+    ):
         new_message, result = controller.chat(TEST_PROMPT_TEXT)
     assert isinstance(new_message, LLMMessage)
     assert result == retval
@@ -95,7 +102,10 @@ def test_chat(caller, retval):
 )
 async def test_achat(anyio_backend, caller, retval):
     controller = ChatController(Caller=caller())
-    with patch(f"{caller.__module__}.{caller.__name__}.acall", return_value=retval):
+    with (
+        patch(f"{caller.__module__}.{caller.__name__}.acall", return_value=retval),
+        patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1),
+    ):
         new_message, result = await controller.achat(TEST_PROMPT_TEXT)
     assert isinstance(new_message, LLMMessage)
     assert result == retval
@@ -109,9 +119,10 @@ def test_prechat(sys_msg_indices, expected):
     sys_msg = {idx: TEST_SYSTEM_TEXT for idx in sys_msg_indices}
     caller = TEST_CALLERS[0]
     controller = ChatController(Caller=caller(), Sys_Msg=sys_msg)
-    new_message, latest_convo = controller._prechat(
-        TEST_PROMPT_TEXT, LLM_DEFAULT_MAX_TOKENS
-    )
+    with patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1):
+        new_message, latest_convo = controller._prechat(
+            TEST_PROMPT_TEXT, LLM_DEFAULT_MAX_TOKENS
+        )
     assert isinstance(new_message, LLMMessage)
     assert latest_convo == expected
 
@@ -122,8 +133,11 @@ def test_plugin():
     plugin = TESTPLUGIN(Caller=caller())
     controller = ChatController(Caller=caller(), Sys_Msg=sys_msg)
     controller.register_plugin(plugin)
-    with patch(
-        f"{caller.__module__}.{caller.__name__}.call", return_value=TEST_LLM_OUTPUT
+    with (
+        patch(
+            f"{caller.__module__}.{caller.__name__}.call", return_value=TEST_LLM_OUTPUT
+        ),
+        patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1),
     ):
         new_message, result = controller.chat(TEST_PROMPT_TEXT)
     assert result == TEST_LLM_OUTPUT
@@ -135,15 +149,19 @@ def test_plugin():
     assert controller.Sys_Msg == sys_msg
     controller.unregister_plugin(plugin)
     assert controller._plugins == []
-    
+
+
 async def test_aplugin(anyio_backend):
     sys_msg = {idx: TEST_SYSTEM_TEXT for idx in [0, -1]}
     caller = TEST_CALLERS[0]
     plugin = TESTPLUGIN(Caller=caller())
     controller = ChatController(Caller=caller(), Sys_Msg=sys_msg)
     controller.register_plugin(plugin)
-    with patch(
-        f"{caller.__module__}.{caller.__name__}.acall", return_value=TEST_LLM_OUTPUT
+    with (
+        patch(
+            f"{caller.__module__}.{caller.__name__}.acall", return_value=TEST_LLM_OUTPUT
+        ),
+        patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1),
     ):
         new_message, result = await controller.achat(TEST_PROMPT_TEXT)
     assert result == TEST_LLM_OUTPUT

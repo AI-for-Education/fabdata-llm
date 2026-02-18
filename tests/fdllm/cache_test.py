@@ -1,5 +1,3 @@
-import dotenv
-dotenv.load_dotenv()
 from typing import List
 import pytest
 
