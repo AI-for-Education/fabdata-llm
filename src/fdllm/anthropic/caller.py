@@ -190,21 +190,28 @@ class ClaudeCaller(LLMCaller):
                         )
                         content = [[], content]
                 else:
+                    text = "".join(
+                        b.text for b in content if isinstance(b, BetaTextBlock)
+                    ).strip()
                     out = LLMMessage(
                         Role="assistant",
-                        Message=content[0].text,
+                        Message=text,
                         Latency=latency,
                         **token_count_kwargs,
                     )
                 if len(content) > 1:
-                    out.ToolCalls = []
-                    for tcout in output.content[1:]:
-                        tc = LLMToolCall(
-                            ID=tcout.id,
-                            Name=tcout.name,
-                            Args=tcout.input,
-                        )
-                    out.ToolCalls.append(tc)
+                    tool_blocks = [
+                        b for b in content[1:] if isinstance(b, BetaToolUseBlock)
+                    ]
+                    if tool_blocks:
+                        out.ToolCalls = []
+                        for tcout in tool_blocks:
+                            tc = LLMToolCall(
+                                ID=tcout.id,
+                                Name=tcout.name,
+                                Args=tcout.input,
+                            )
+                            out.ToolCalls.append(tc)
             return out
 
     def format_tool(self, tool: Tool):
