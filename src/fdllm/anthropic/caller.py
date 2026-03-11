@@ -224,16 +224,22 @@ class ClaudeCaller(LLMCaller):
                             )
                             out.ToolCalls.append(tc)
                 else:
+                    text = "".join(
+                        b.text for b in content if isinstance(b, BetaTextBlock)
+                    ).strip()
                     out = LLMMessage(
                         Role="assistant",
-                        Message=content[0].text,
+                        Message=text,
                         Latency=latency,
                         **token_count_kwargs,
                     )
-                    # Process tool blocks after the first text block
-                    if len(content) > 1:
+                if len(content) > 1:
+                    tool_blocks = [
+                        b for b in content[1:] if isinstance(b, BetaToolUseBlock)
+                    ]
+                    if tool_blocks:
                         out.ToolCalls = []
-                        for tcout in content[1:]:
+                        for tcout in tool_blocks:
                             tc = LLMToolCall(
                                 ID=tcout.id,
                                 Name=tcout.name,
