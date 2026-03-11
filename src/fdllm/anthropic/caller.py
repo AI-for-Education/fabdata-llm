@@ -223,6 +223,7 @@ class ClaudeCaller(LLMCaller):
                                 Args=tcout.input,
                             )
                             out.ToolCalls.append(tc)
+                        return out
                 else:
                     text = "".join(
                         b.text for b in content if isinstance(b, BetaTextBlock)
