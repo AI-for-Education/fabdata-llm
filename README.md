@@ -3,7 +3,7 @@
 
 ## Introduction
 
-FabData-LLM is a Python package that provides set of high-level abstractions around various LLM API providers. It currently covers OpenAI, Azure OpenAI, Anthropic, Azure Mistral AI, Google Vertex, Google GenAI, and Amazon Bedrock. It can also use any models exposed via an OpenAI compatible API (e.g. OpenRouter, FireWorks, etc.).  
+FabData-LLM is a Python package that provides a set of high-level abstractions around various LLM API providers. It currently covers OpenAI, Azure OpenAI, Anthropic, Azure Mistral AI, Google Vertex, Google GenAI, and Amazon Bedrock. It can also use any models exposed via an OpenAI compatible API (e.g. OpenRouter, FireWorks, etc.).  
 
 ### Why you might consider using this
 
@@ -58,8 +58,8 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
         chatter = ChatController(
             Caller=get_caller("gpt-4o-2024-08-06"),
             Sys_Msg={
-                0: "This will appear at the start of the conversation"
-                -1: "This will appear at the end of the conversation, after the user chat input"
+                0: "This will appear at the start of the conversation",
+                -1: "This will appear at the end of the conversation, after the user chat input",
                 -2: "This will appear at the end of the conversation, before the user chat input"
             }
         )
@@ -69,7 +69,7 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
 
     One of the major inconveniences with writing tools is that the tool definition schemas and the actual functions that they call aren't connected to each other in any way. The `Tool` class in FabData-LLM brings the two things together in a single object. Tool definition schemas are automatically generated from the tool's parameters according to different formats (currently only supports OpenAI's and Anthropic's formats), and tool execution is wrapped in parameter validation steps. This makes debugging easier as you can more easily identify formatting errors in tool call instructions returned by LLMs.
 
-    The `ToolUsePlugin` class lets you connect a tool or set of tools to a `ChatController` object. It automatically handles all of the logic of passing tool definition schemas, intercepting tool call instructions, executing tool calls, and communicating the results back to the LLM. Parallel tool calls and sequential tool calls are also handled automatically. It currently supports all tool-enambled models from OpenAI and Anthropic. Any custom models from the OpenAI or Anthropic families that are known to support tool use can be used if set with the parameter `Tool_Use: True` in the model config file.
+    The `ToolUsePlugin` class lets you connect a tool or set of tools to a `ChatController` object. It automatically handles all of the logic of passing tool definition schemas, intercepting tool call instructions, executing tool calls, and communicating the results back to the LLM. Parallel tool calls and sequential tool calls are also handled automatically. It currently supports all tool-enabled models from OpenAI and Anthropic. Any custom models from the OpenAI or Anthropic families that are known to support tool use can be used if set with the parameter `Tool_Use: True` in the model config file.
 
     ```python
     from fdllm import get_caller
@@ -116,7 +116,7 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
     inmsg, outmsg = chatter.chat("(pi * 5.4) + (6 * e)")
     print(outmsg)
 
-    # view the chat history, including the chain of tools calls
+    # view the chat history, including the chain of tool calls
     print(chatter.History)
 
     # view the history of only the last conversational event (i.e. from user input to final response)
@@ -135,7 +135,7 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
 
 - You want to switch between OpenAI API and multiple different Azure OpenAI endpoints without having to change global environment variable configurations and without having to deal with variations between the two APIs
 
-    - Fabdata-LLM allows you to register custom model configurations in a yaml file, with invidual endpoints, api keys, and other client arguments for each model. Models must have a unique name and can be entered either in a top level `models:` key, or in other arbitrary top-level keys for which child `models:` inherit the settings from the block. 
+    - Fabdata-LLM allows you to register custom model configurations in a YAML file, with individual endpoints, API keys, and other client arguments for each model. Models must have a unique name and can be entered either in a top level `models:` key, or in other arbitrary top-level keys for which child `models:` inherit the settings from the block. 
 
         ```yaml
         models:
@@ -191,7 +191,7 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
         caller = get_caller("my_azure_deployment_1")
         ```
 
-    - Custom model configurations are deep-merged with the base model configuration, allowing you to set only a subset of custom values for an existing model (e.g. setting the individual api keys for gpt-3.5-turbo in the above example)
+    - Custom model configurations are deep-merged with the base model configuration, allowing you to set only a subset of custom values for an existing model (e.g. setting the individual API keys for gpt-3.5-turbo in the above example)
     - You can still use global environment variables if you prefer. The following environment variables will be recognised, by default, but custom environment variables can be specified for individual models with the `Api_Key_Env_Var` setting:
 
         ```env
@@ -211,8 +211,8 @@ FabData-LLM is a Python package that provides set of high-level abstractions aro
             # "aws_secret_access_key" separated by a space
         # Mistral API
             MISTRAL_API_KEY
-        ``````
-    
+        ```
+
 - You want all of this functionality in both sync and async applications
     - All LLMCaller objects have two call methods: ```call``` and ```acall```
     - ChatController object has two chat methods: ```chat``` and ```achat```
@@ -230,7 +230,7 @@ The easiest way to install is to use the dedicated conda environment provided in
 conda env create -f environment.yml
 ```
 
-This creates a conda environment called ```fabdata-llm``` and installs the package along with dependencies inside it. See [Miniconda install](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html) for instructions on how to install conda if you don't already have it installed and [condas user guide](https://docs.conda.io/projects/conda/en/latest/user-guide/index.html) for a more general guide to using conda.
+This creates a conda environment called ```fabdata-llm``` and installs the package along with dependencies inside it. See [Miniconda install](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html) for instructions on how to install conda if you don't already have it installed and [conda's user guide](https://docs.conda.io/projects/conda/en/latest/user-guide/index.html) for a more general guide to using conda.
 
 You can also install into any existing python (3.10, or 3.11) environment by running:
 
@@ -266,7 +266,7 @@ from fdllm.sysutils import register_models
 register_models("/path/to/my/custom/models.yaml")
 ```
 
-The configuration file is particularly useful for configuring other inference providers that provide OpenAI API compatible endpoints. For example, providers like Fireworks.ai or OpenRouter can be easily configured. It is also useful for supporting different Azure OpenAI deployments, with different endpoints and api keys. If you are only interested in setting global api keys for different providers, then the base model configuration is likely enough for your needs, and you can instead set the following environment variables:
+The configuration file is particularly useful for configuring other inference providers that provide OpenAI API compatible endpoints. For example, providers like Fireworks.ai or OpenRouter can be easily configured. It is also useful for supporting different Azure OpenAI deployments, with different endpoints and API keys. If you are only interested in setting global API keys for different providers, then the base model configuration is likely enough for your needs, and you can instead set the following environment variables:
 
 ```env
 # will apply globally to all models that use the OpenAI API
@@ -276,7 +276,7 @@ The configuration file is particularly useful for configuring other inference pr
     AZURE_OPENAI_ENDPOINT
     OPENAI_API_VERSION
 # will apply globally to all models that use the Anthropic API
-    ANTHROPIC_KEY
+    ANTHROPIC_API_KEY
 # will apply globally to all models that use the Mistral API
     MISTRAL_API_KEY
 ```
