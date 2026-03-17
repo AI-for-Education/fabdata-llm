@@ -240,6 +240,12 @@ pip install .
 
 from inside the repository directory. If you encounter any dependency clashes then please feel free to report in the discussion and we will see if we can loosen any of the dependency restrictions.
 
+If you wish to add as a dependency to a project using uv package manager:
+
+```shell
+uv add git+https://github.com/AI-for-Education/fabdata-llm.git@main
+```
+
 ### Configuration
 
 The package comes with a base model configuration which can be extended by user-provided custom configurations. You can get the base model configuration dictionary by:
