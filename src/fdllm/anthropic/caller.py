@@ -215,6 +215,11 @@ class ClaudeCaller(LLMCaller):
                             **token_count_kwargs,
                         )
                         # Process ALL content items as tool calls
+                        # Anthropic documents tool-first responses such as
+                        # thinking -> tool_use and multiple tool_use blocks.
+                        # If they later expand this branch to allow trailing
+                        # non-tool blocks after a tool-first start, revisit
+                        # this loop and add coverage for that ordering.
                         out.ToolCalls = []
                         for tcout in content:
                             tc = LLMToolCall(
