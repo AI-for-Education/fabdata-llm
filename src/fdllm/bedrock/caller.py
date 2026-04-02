@@ -197,7 +197,7 @@ class BedrockCaller(LLMCaller):
     def format_output(
         self,
         output: Any,
-        response_schema: Optional[BaseModel] = None,
+        response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
         if isinstance(output, GeneratorType):

@@ -156,7 +156,7 @@ class OpenAICaller(LLMCaller):
     def format_output(
         self,
         output: Any,
-        response_schema: Optional[BaseModel] = None,
+        response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
         return _gpt_common_fmt_output(output, latency)
@@ -345,7 +345,7 @@ class OpenAICompletionsCaller(OpenAICaller):
     def format_output(
         self,
         output: Any,
-        response_schema: Optional[BaseModel] = None,
+        response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ) -> LLMMessage:
         """Format the completions API output to LLMMessage format."""

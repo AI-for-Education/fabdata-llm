@@ -165,7 +165,7 @@ class ClaudeCaller(LLMCaller):
     def format_output(
         self,
         output,
-        response_schema: Optional[BaseModel] = None,
+        response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
         if isinstance(output, GeneratorType):

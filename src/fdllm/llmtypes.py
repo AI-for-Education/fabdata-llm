@@ -102,7 +102,7 @@ class LLMModelType(BaseModel):
         }
 
     @classmethod
-    def get_type(cls, name) -> LLMModelType:
+    def get_type(cls, name) -> type[LLMModelType]:
         models = load_models()
         if name not in models:
             raise NotImplementedError(
