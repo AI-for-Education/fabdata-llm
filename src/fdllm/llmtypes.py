@@ -102,7 +102,7 @@ class LLMModelType(BaseModel):
         }
 
     @classmethod
-    def get_type(cls, name) -> LLMModelType:
+    def get_type(cls, name) -> type[LLMModelType]:
         models = load_models()
         if name not in models:
             raise NotImplementedError(
@@ -404,7 +404,7 @@ class LLMCaller(ABC, BaseModel):
 
     @abstractmethod
     def format_output(
-        self, output: Any, response_schema: Optional[BaseModel] = None
+        self, output: Any, response_schema: Optional[type[BaseModel]] = None
     ) -> LLMMessage:
         pass
 
@@ -432,7 +432,7 @@ class LLMCaller(ABC, BaseModel):
         self,
         messages: List[LLMMessage] | LLMMessage,
         max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
-        response_schema: Optional[BaseModel] = None,
+        response_schema: Optional[type[BaseModel]] = None,
         **kwargs,
     ):
         # Ensure messages is a list for logging
@@ -458,7 +458,7 @@ class LLMCaller(ABC, BaseModel):
         self,
         messages: List[LLMMessage] | LLMMessage,
         max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
-        response_schema: Optional[BaseModel] = None,
+        response_schema: Optional[type[BaseModel]] = None,
         **kwargs,
     ):
         # Ensure messages is a list for logging
