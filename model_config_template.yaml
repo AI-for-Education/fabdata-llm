@@ -103,7 +103,7 @@ models:
 OpenAICompatibleProvider:
   Api_Interface: OpenAI
   Token_Window: # required
-  Max_Tokens_Arg_Name: 
+  Max_Token_Arg_Name: 
   Api_Key_Env_Var: 
   Client_Args:
     base_url: 

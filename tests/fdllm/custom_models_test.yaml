@@ -49,7 +49,7 @@ OpenAICompletions:
       Token_Window: 4096
       Token_Limit_Completion: 4096
 
-OpenAIBenchmarks:
+OpenAI:
   Api_Interface: OpenAI
   Token_Window: 200000
   Token_Limit_Completion: 100000

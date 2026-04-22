@@ -40,7 +40,7 @@ AmazonBedrock:
     amazon-nova-pro-v1:
       Token_Limit_Completion: 5000
       Api_Model_Name: "amazon.nova-pro-v1:0"
-    amazon-nova-lite-v1: 
+    amazon-nova-lite-v1:
       Token_Limit_Completion: 5000
       Api_Model_Name: "amazon.nova-lite-v1:0"
     amazon-nova-micro-v1:
@@ -171,10 +171,10 @@ Google:
       Vision: True
       Token_Window: 1048576
       Token_Limit_Completion: 65536
-    
 
-OpenAIBenchmrks:
+OpenAI:
   Api_Interface: OpenAI
+  Api_Key_Env_Var: OPENAI_API_KEY
   Token_Window: 200000
   Token_Limit_Completion: 100000
   Tool_Use: True
@@ -351,11 +351,11 @@ OpenAIBenchmrks:
       Token_Window: 1050000
       Token_Limit_Completion: 128000
     gpt-5.4-2026-03-05-medium:
-       Api_Model_Name: gpt-5.4-2026-03-05
-       Token_Window: 1050000
-       Token_Limit_Completion: 128000
-       Call_Args:
-         reasoning_effort: medium
+      Api_Model_Name: gpt-5.4-2026-03-05
+      Token_Window: 1050000
+      Token_Limit_Completion: 128000
+      Call_Args:
+        reasoning_effort: medium
     gpt-5.4-mini-2026-03-17:
       Api_Model_Name: gpt-5.4-mini-2026-03-17
       Token_Window: 1050000
@@ -398,6 +398,7 @@ ByteDance:
 
 Anthropic:
   Api_Interface: Anthropic
+  Api_Key_Env_Var: ANTHROPIC_API_KEY
   Max_Token_Arg_Name: max_tokens
   Flexible_SysMsg: False
   Token_Window: 200000
@@ -411,6 +412,7 @@ Anthropic:
 
 Anthropic_Thinking:
   Api_Interface: AnthropicStreaming
+  Api_Key_Env_Var: ANTHROPIC_API_KEY
   Max_Token_Arg_Name: max_tokens
   Flexible_SysMsg: False
   Token_Window: 200000
@@ -526,11 +528,11 @@ Grok:
       Token_Limit_Completion: 1900000
       Tool_Use: True
       Vision: True
-      
+
 Moonshot:
   Api_Interface: OpenAI
   Api_Key_Env_Var: MOONSHOT_API_KEY
-  Max_Tokens_Arg_Name: max_tokens
+  Max_Token_Arg_Name: max_tokens
   Client_Args:
     base_url: https://api.moonshot.ai/v1
   models:

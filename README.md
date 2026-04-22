@@ -152,7 +152,7 @@ FabData-LLM is a Python package that provides a set of high-level abstractions a
             # these parameters will apply to models listed in models: of this block
             # individual models can overwrite these settings
             Api_Interface: OpenAI
-            Max_Tokens_Arg_Name: max_tokens
+            Max_Token_Arg_Name: max_tokens
             Token_Window: 128000
             Api_Key_Env_Var: FIREWORKS_API_KEY
             Client_Args:
