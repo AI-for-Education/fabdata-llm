@@ -43,7 +43,7 @@ def bedrock_async_wrapper(aclient):
 
 
 class BedrockCaller(LLMCaller):
-    def __init__(self, model: str = ""):
+    def __init__(self, model: str):
         Modtype = LLMModelType.get_type(model)
         if Modtype not in [BedrockModelType]:
             raise ValueError(f"{model} is not supported")

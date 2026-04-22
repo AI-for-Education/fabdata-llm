@@ -96,7 +96,7 @@ TEST_EXCEPTION = {
     "extra_multi": ToolInvalidParamError,
 }
 
-TEST_CALLERS = ["gpt-3.5-turbo-1106", "claude-3-haiku-20240307"]
+TEST_CALLERS = ["gpt-4.1-mini", "claude-3-7-sonnet-latest"]
 
 
 @pytest.mark.parametrize(

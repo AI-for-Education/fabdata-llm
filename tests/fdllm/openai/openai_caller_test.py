@@ -35,7 +35,8 @@ TEST_RESULT_OPENAI = SimpleNamespace(
         message=SimpleNamespace(content=TEST_MESSAGE_TEXT)
     )]
 )
-TEST_MODELS = ["gpt-3.5-turbo", "gpt-4.1-mini"]
+DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
+TEST_MODELS = ["gpt-4.1-mini"]
 TEST_VISION_MODELS = ["gpt-4.1"]
 
 register_models(TEST_ROOT / "custom_models_test.yaml")
@@ -61,25 +62,26 @@ def test_init_openaivision(model):
     ],
 )
 def test_format_message_openai(role, expected):
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     assert caller.format_message(TEST_MESSAGE[role]) == expected
 
 
 def test_format_messagelist_openai():
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     out = caller.format_messagelist(TEST_MESSAGE_LIST)
     expected = [caller.format_message(message) for message in TEST_MESSAGE_LIST]
     assert out == expected
 
 
 def test_format_output_openai():
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     out = caller.format_output(TEST_RESULT_OPENAI)
     assert isinstance(out, LLMMessage)
 
 
 def test_tokenize_openai():
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    caller.Model.Vision = False  # Exercise non-vision tokenization path
     out = len(caller.tokenize(TEST_MESSAGE_LIST))
     expected = len(
         tokenize_chatgpt_messages(caller.format_messagelist(TEST_MESSAGE_LIST))[0]
@@ -91,7 +93,7 @@ def test_tokenize_openai():
 
 def test_format_message_tool_role():
     """Test formatting of messages with tool role"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     tool_calls = [
         LLMToolCall(ID="call_123", Name="get_weather", Args={"city": "NYC"}, Response='{"temp": 72}'),
@@ -119,7 +121,7 @@ def test_format_message_tool_role():
 
 def test_format_message_assistant_tool_calls():
     """Test formatting of assistant messages with tool calls"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     tool_calls = [
         LLMToolCall(ID="call_789", Name="search", Args={"query": "test"}),
@@ -145,7 +147,7 @@ def test_format_message_assistant_tool_calls():
 
 def test_format_tool():
     """Test format_tool method"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     # Create a mock tool
     class TestTool(Tool):
@@ -184,7 +186,7 @@ def test_format_tool():
 
 def test_format_messagelist_with_tool_messages():
     """Test format_messagelist with tool messages that get extended"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     tool_calls = [
         LLMToolCall(ID="call_1", Name="tool1", Response="result1"),
@@ -240,7 +242,8 @@ def test_format_message_with_image_url():
 
 def test_format_message_images_non_vision_model():
     """Test that images raise error for non-vision models"""
-    caller = OpenAICaller(model="gpt-3.5-turbo")  # Non-vision model
+    caller = OpenAICaller(model="gpt-4.1-mini")
+    caller.Model.Vision = False  # Force non-vision behavior
 
     img = Image.new('RGB', (10, 10))
     llm_image = LLMImage(Img=img)
@@ -278,7 +281,7 @@ def test_tokenize_with_vision():
 ])
 def test_format_message_reasoning_models_system_to_developer(model_name):
     """Test o1/o3 reasoning models convert system role to developer"""
-    caller = OpenAICaller(model="gpt-3.5-turbo")
+    caller = OpenAICaller(model="gpt-4.1-mini")
     caller.Model.Name = model_name
 
     message = LLMMessage(Role="system", Message="You are a helpful assistant")
@@ -292,7 +295,7 @@ def test_format_message_reasoning_models_system_to_developer(model_name):
 
 def test_format_output_with_usage_and_reasoning_tokens():
     """Test format_output with reasoning tokens"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     # Mock output with reasoning tokens
     output = SimpleNamespace(
@@ -320,7 +323,7 @@ def test_format_output_with_usage_and_reasoning_tokens():
 
 def test_format_output_without_reasoning_tokens():
     """Test format_output without completion_tokens_details"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     output = SimpleNamespace(
         choices=[SimpleNamespace(
@@ -341,7 +344,7 @@ def test_format_output_without_reasoning_tokens():
 
 def test_format_output_with_tool_calls():
     """Test format_output with tool calls in response"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     output = SimpleNamespace(
         choices=[SimpleNamespace(
@@ -380,7 +383,7 @@ def test_format_output_with_tool_calls():
 
 def test_format_output_invalid():
     """Test format_output with invalid output"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     # Output with neither content nor tool_calls
     output = SimpleNamespace(
@@ -397,7 +400,7 @@ def test_format_output_invalid():
 
 def test_format_output_generator():
     """Test format_output with generator type"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     def gen():
         yield "test"
@@ -417,7 +420,7 @@ def test_proc_call_args_with_response_schema():
     class ResponseSchema(BaseModel):
         result: str
 
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     messages = [LLMMessage(Role="user", Message="test")]
 
     # Mock the type_to_response_format_param function
@@ -432,7 +435,7 @@ def test_proc_call_args_with_response_schema():
 
 def test_proc_call_args_extra_body_merge():
     """Test _proc_call_args merging extra_body"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     caller.Model.Extra_Body = {"default_key": "default_value"}
 
     messages = [LLMMessage(Role="user", Message="test")]
@@ -449,7 +452,7 @@ def test_proc_call_args_extra_body_merge():
 
 def test_proc_call_args_extra_body_default():
     """Test _proc_call_args with default extra_body"""
-    caller = OpenAICaller()
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     caller.Model.Extra_Body = {"key": "value"}
 
     messages = [LLMMessage(Role="user", Message="test")]
@@ -476,7 +479,7 @@ def test_completions_caller_init():
 def test_completions_caller_invalid_model():
     """Test OpenAICompletionsCaller with non-completions model"""
     with pytest.raises(ValueError, match="not supported for completions API"):
-        OpenAICompletionsCaller(model="gpt-3.5-turbo")
+        OpenAICompletionsCaller(model="gpt-4.1-mini")
 
 
 def test_completions_format_message_system():

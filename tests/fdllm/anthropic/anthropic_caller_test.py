@@ -30,6 +30,8 @@ TEST_ROOT = HERE.parent
 
 load_dotenv(TEST_ROOT / "test.env", override=True)
 
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
+
 
 # ============================================================================
 # Fixtures and Helpers
@@ -38,13 +40,13 @@ load_dotenv(TEST_ROOT / "test.env", override=True)
 @pytest.fixture
 def caller():
     """Create a ClaudeCaller instance for testing."""
-    return ClaudeCaller()
+    return ClaudeCaller(model=DEFAULT_CLAUDE_MODEL)
 
 
 @pytest.fixture
 def vision_caller():
     """Create a ClaudeCaller with vision support."""
-    return ClaudeCaller(model="claude-3-5-sonnet-latest")
+    return ClaudeCaller(model=DEFAULT_CLAUDE_MODEL)
 
 
 def make_tool_block(id: str, name: str, input: dict = None):
@@ -88,18 +90,13 @@ class SampleTool(Tool):
 class TestInitialization:
     """Tests for ClaudeCaller and ClaudeStreamingCaller initialization."""
 
-    def test_init_default_model(self):
-        """Test ClaudeCaller initializes with default model."""
-        caller = ClaudeCaller()
+    def test_init_specific_model(self):
+        """Test ClaudeCaller with specific model."""
+        caller = ClaudeCaller(model="claude-haiku-4-5-20251001")
         assert caller.Arg_Names.Messages == "messages"
         assert caller.Arg_Names.Model == "model"
         assert caller.Arg_Names.Response_Schema == "tools"
-        assert caller.Model.Name == "claude-3-5-sonnet-latest"
-
-    def test_init_specific_model(self):
-        """Test ClaudeCaller with specific model."""
-        caller = ClaudeCaller(model="claude-3-haiku-20240307")
-        assert caller.Model.Name == "claude-3-haiku-20240307"
+        assert caller.Model.Name == "claude-haiku-4-5-20251001"
 
     def test_init_invalid_model(self):
         """Test ClaudeCaller rejects invalid model names."""
@@ -109,12 +106,12 @@ class TestInitialization:
     def test_init_non_anthropic_model(self):
         """Test ClaudeCaller rejects non-Anthropic models."""
         with pytest.raises(ValueError, match="is not supported"):
-            ClaudeCaller(model="gpt-4o")
+            ClaudeCaller(model="gpt-4.1-mini")
 
     def test_init_streaming_caller(self):
         """Test ClaudeStreamingCaller initialization."""
-        caller = ClaudeStreamingCaller()
-        assert caller.Model.Name == "claude-3-5-sonnet-latest"
+        caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
+        assert caller.Model.Name == DEFAULT_CLAUDE_MODEL
         # Streaming caller should have different retry methods
         assert caller._sync_call_with_retry is not None
         assert caller._async_call_with_retry is not None
