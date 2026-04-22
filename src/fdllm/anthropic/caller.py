@@ -41,7 +41,7 @@ class ClaudeCaller(LLMCaller):
     Client: anthropic._base_client.BaseClient
     AClient: anthropic._base_client.BaseClient
 
-    def __init__(self, model: str = "claude-3-5-sonnet-latest"):
+    def __init__(self, model: str):
         Modtype = LLMModelType.get_type(model)
         if Modtype not in [AnthropicModelType, AnthropicStreamingModelType]:
             raise ValueError(f"{model} is not supported")
@@ -311,7 +311,7 @@ class ClaudeCaller(LLMCaller):
 
 
 class ClaudeStreamingCaller(ClaudeCaller):
-    def __init__(self, model: str = "claude-3-5-sonnet-latest"):
+    def __init__(self, model: str):
         super().__init__(model)
 
         self.Func = self.Client.beta.messages.stream

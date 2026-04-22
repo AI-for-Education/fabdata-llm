@@ -34,7 +34,7 @@ from ..tooluse import Tool
 
 
 class OpenAICaller(LLMCaller):
-    def __init__(self, model: str = "gpt-3.5-turbo"):
+    def __init__(self, model: str):
         Modtype = LLMModelType.get_type(model)
         model_: LLMModelType = Modtype(Name=model)
 
@@ -258,7 +258,7 @@ def _gpt_common_fmt_output(output, latency):
 class OpenAICompletionsCaller(OpenAICaller):
     """OpenAI Completions API caller that uses the legacy completions endpoint instead of chat completions."""
 
-    def __init__(self, model: str = "text-davinci-003"):
+    def __init__(self, model: str):
         # Get the model type first
         Modtype = LLMModelType.get_type(model)
         if Modtype not in [OpenAICompletionsModelType]:

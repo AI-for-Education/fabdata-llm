@@ -44,7 +44,7 @@ def test_init_mistral():
 def test_init_invalid_model():
     """Test MistralCaller rejects non-Mistral models."""
     with pytest.raises(ValueError, match="is not supported"):
-        MistralCaller(model="gpt-4o")
+        MistralCaller(model="gpt-4.1-mini")
 
 
 def test_init_unrecognized_model():

@@ -23,8 +23,8 @@ load_dotenv(TEST_ROOT / "test.env", override=True)
 
 register_models(TEST_ROOT / "custom_models_test.yaml")
 
-TEST_MODEL = "bedrock-claude-sonnet"
-TEST_VISION_MODEL = "bedrock-claude-sonnet-vision"
+TEST_MODEL = "bedrock-nova-micro"
+TEST_VISION_MODEL = "bedrock-nova-lite"
 
 
 # ===== Helper Classes =====
@@ -66,7 +66,7 @@ def test_init_bedrock(mock_aioboto3, mock_boto3):
 def test_init_invalid_model(mock_aioboto3, mock_boto3):
     """Test BedrockCaller rejects non-Bedrock models."""
     with pytest.raises(ValueError, match="is not supported"):
-        BedrockCaller(model="gpt-4o")
+        BedrockCaller(model="gpt-4.1-mini")
 
 
 @patch('fdllm.bedrock.caller.boto3')

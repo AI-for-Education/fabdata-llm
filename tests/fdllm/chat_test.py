@@ -79,15 +79,19 @@ TEST_SYSMSG_FORMAT = {
         TEST_SYSTEM_MESSAGE,
     ],
 }
-TEST_CALLERS = [OpenAICaller, ClaudeCaller, GoogleGenAICaller]
+TEST_CALLERS = [
+    (OpenAICaller, "gpt-4.1-mini"),
+    (ClaudeCaller, "claude-sonnet-4-5-20250929"),
+    (GoogleGenAICaller, "gemini-2.0-flash"),
+]
 
 
 @pytest.mark.parametrize(
-    "caller, retval",
-    [(caller, TEST_LLM_OUTPUT) for caller in TEST_CALLERS],
+    "caller, model, retval",
+    [(caller, model, TEST_LLM_OUTPUT) for caller, model in TEST_CALLERS],
 )
-def test_chat(caller, retval):
-    controller = ChatController(Caller=caller())
+def test_chat(caller, model, retval):
+    controller = ChatController(Caller=caller(model))
     with (
         patch(f"{caller.__module__}.{caller.__name__}.call", return_value=retval),
         patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1),
@@ -98,10 +102,11 @@ def test_chat(caller, retval):
 
 
 @pytest.mark.parametrize(
-    "caller, retval", [(caller, TEST_LLM_OUTPUT) for caller in TEST_CALLERS]
+    "caller, model, retval",
+    [(caller, model, TEST_LLM_OUTPUT) for caller, model in TEST_CALLERS],
 )
-async def test_achat(anyio_backend, caller, retval):
-    controller = ChatController(Caller=caller())
+async def test_achat(anyio_backend, caller, model, retval):
+    controller = ChatController(Caller=caller(model))
     with (
         patch(f"{caller.__module__}.{caller.__name__}.acall", return_value=retval),
         patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1),
@@ -117,8 +122,8 @@ async def test_achat(anyio_backend, caller, retval):
 )
 def test_prechat(sys_msg_indices, expected):
     sys_msg = {idx: TEST_SYSTEM_TEXT for idx in sys_msg_indices}
-    caller = TEST_CALLERS[0]
-    controller = ChatController(Caller=caller(), Sys_Msg=sys_msg)
+    caller, model = TEST_CALLERS[0]
+    controller = ChatController(Caller=caller(model), Sys_Msg=sys_msg)
     with patch(f"{caller.__module__}.{caller.__name__}.count_tokens", return_value=1):
         new_message, latest_convo = controller._prechat(
             TEST_PROMPT_TEXT, LLM_DEFAULT_MAX_TOKENS
@@ -129,9 +134,9 @@ def test_prechat(sys_msg_indices, expected):
 
 def test_plugin():
     sys_msg = {idx: TEST_SYSTEM_TEXT for idx in [0, -1]}
-    caller = TEST_CALLERS[0]
-    plugin = TESTPLUGIN(Caller=caller())
-    controller = ChatController(Caller=caller(), Sys_Msg=sys_msg)
+    caller, model = TEST_CALLERS[0]
+    plugin = TESTPLUGIN(Caller=caller(model))
+    controller = ChatController(Caller=caller(model), Sys_Msg=sys_msg)
     controller.register_plugin(plugin)
     with (
         patch(
@@ -153,9 +158,9 @@ def test_plugin():
 
 async def test_aplugin(anyio_backend):
     sys_msg = {idx: TEST_SYSTEM_TEXT for idx in [0, -1]}
-    caller = TEST_CALLERS[0]
-    plugin = TESTPLUGIN(Caller=caller())
-    controller = ChatController(Caller=caller(), Sys_Msg=sys_msg)
+    caller, model = TEST_CALLERS[0]
+    plugin = TESTPLUGIN(Caller=caller(model))
+    controller = ChatController(Caller=caller(model), Sys_Msg=sys_msg)
     controller.register_plugin(plugin)
     with (
         patch(

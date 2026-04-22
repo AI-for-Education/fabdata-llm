@@ -17,7 +17,7 @@ class GoogleGenAICaller(LLMCaller):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     Client: genai.client.Client
 
-    def __init__(self, model: str = "gemini-2.0-flash-exp"):
+    def __init__(self, model: str):
         Modtype = LLMModelType.get_type(model)
         model: LLMModelType = Modtype(Name=model)
 
