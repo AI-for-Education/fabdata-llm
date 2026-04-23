@@ -492,6 +492,86 @@ class TestFormatOutput:
         assert result.Message == "Answer"
         assert result.TokensUsedReasoning == 5
 
+    def test_with_thinking_text_then_tool_use(self, caller):
+        """Test documented extended-thinking shape: thinking -> text -> tool_use."""
+        thinking = BetaThinkingBlock(type="thinking", thinking="Need a tool", signature="sig")
+        output = SimpleNamespace(
+            content=[
+                thinking,
+                make_text_block("I'll look that up."),
+                make_tool_block("c1", "search", {"q": "test"}),
+            ],
+            usage=Usage(input_tokens=10, output_tokens=30),
+        )
+
+        with patch.object(
+            caller.Client.beta.messages,
+            "count_tokens",
+            return_value=SimpleNamespace(input_tokens=5),
+        ):
+            result = caller.format_output(output)
+
+        assert result.Message == "I'll look that up."
+        assert result.TokensUsedReasoning == 5
+        assert len(result.ToolCalls) == 1
+        assert result.ToolCalls[0].ID == "c1"
+        assert result.ToolCalls[0].Name == "search"
+        assert result.ToolCalls[0].Args == {"q": "test"}
+
+    def test_with_thinking_then_tool_use(self, caller):
+        """Test documented extended-thinking shape: thinking -> tool_use."""
+        thinking = BetaThinkingBlock(type="thinking", thinking="Need a tool", signature="sig")
+        output = SimpleNamespace(
+            content=[
+                thinking,
+                make_tool_block("c1", "search", {"q": "test"}),
+            ],
+            usage=Usage(input_tokens=10, output_tokens=30),
+        )
+
+        with patch.object(
+            caller.Client.beta.messages,
+            "count_tokens",
+            return_value=SimpleNamespace(input_tokens=5),
+        ):
+            result = caller.format_output(output)
+
+        assert result.Message == ""
+        assert result.TokensUsedReasoning == 5
+        assert len(result.ToolCalls) == 1
+        assert result.ToolCalls[0].ID == "c1"
+        assert result.ToolCalls[0].Name == "search"
+        assert result.ToolCalls[0].Args == {"q": "test"}
+
+    def test_with_thinking_then_multiple_tool_calls(self, caller):
+        """Regression test: thinking -> multiple tool_use blocks keeps all calls."""
+        thinking = BetaThinkingBlock(type="thinking", thinking="Need tools", signature="sig")
+        output = SimpleNamespace(
+            content=[
+                thinking,
+                make_tool_block("c1", "search", {"q": "test"}),
+                make_tool_block("c2", "lookup", {"id": 1}),
+            ],
+            usage=Usage(input_tokens=10, output_tokens=30),
+        )
+
+        with patch.object(
+            caller.Client.beta.messages,
+            "count_tokens",
+            return_value=SimpleNamespace(input_tokens=5),
+        ):
+            result = caller.format_output(output)
+
+        assert result.Message == ""
+        assert result.TokensUsedReasoning == 5
+        assert len(result.ToolCalls) == 2
+        assert result.ToolCalls[0].ID == "c1"
+        assert result.ToolCalls[0].Name == "search"
+        assert result.ToolCalls[0].Args == {"q": "test"}
+        assert result.ToolCalls[1].ID == "c2"
+        assert result.ToolCalls[1].Name == "lookup"
+        assert result.ToolCalls[1].Args == {"id": 1}
+
     def test_response_schema_structured_output(self, caller):
         """Test format_output with response_schema returns JSON string."""
         class Schema(BaseModel):
