@@ -11,9 +11,6 @@ version = "0.30.0"
 requires-python = ">=3.10, <3.13"
 dependencies = [
     "pyyaml",
-    "pytest",
-    "pytest-cov",
-    "pytest-dotenv",
     "pillow",
     "numpy",
     "pydantic==2.*",
@@ -32,6 +29,9 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
+    "pytest",
+    "pytest-cov",
+    "pytest-dotenv",
     "reportlab>=4.0.0",
 ]
 

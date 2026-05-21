@@ -549,9 +549,6 @@ dependencies = [
     { name = "openai" },
     { name = "pillow" },
     { name = "pydantic" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-dotenv" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "tenacity" },
@@ -561,6 +558,9 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "ipykernel" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-dotenv" },
     { name = "reportlab" },
 ]
 
@@ -576,9 +576,6 @@ requires-dist = [
     { name = "openai", specifier = ">=1.61.0,<2" },
     { name = "pillow" },
     { name = "pydantic", specifier = "==2.*" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-dotenv" },
     { name = "python-dotenv", specifier = "==1.*" },
     { name = "pyyaml" },
     { name = "tenacity", specifier = ">=9.1.0" },
@@ -588,6 +585,9 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "ipykernel", specifier = ">=6.29.5" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-dotenv" },
     { name = "reportlab", specifier = ">=4.0.0" },
 ]
 
