@@ -274,8 +274,6 @@ uv lock --exclude-newer "7 days"
 uv sync --frozen
 ```
 
-Do not set `exclude-newer = "7 days"` in global uv configuration for day-to-day work. uv snapshots that relative policy into `uv.lock` as a fixed timestamp, so it should only be applied when deliberately refreshing the lockfile.
-
 ### Configuration
 
 The package comes with a base model configuration which can be extended by user-provided custom configurations. You can get the base model configuration dictionary by:
