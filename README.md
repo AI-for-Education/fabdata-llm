@@ -246,6 +246,36 @@ If you wish to add as a dependency to a project using uv package manager:
 uv add git+https://github.com/AI-for-Education/fabdata-llm.git@main
 ```
 
+### Development with uv
+
+For normal development, run commands against the committed lockfile without allowing uv to update it:
+
+```shell
+uv sync --frozen
+uv run --frozen pytest
+```
+
+Run live integration tests with provider API keys already present in the environment:
+
+```shell
+uv run --frozen pytest -m integration tests/fdllm/integration -q
+```
+
+For local integration testing, keep API keys in an uncommitted `.env` file and let uv load it for the test command:
+
+```shell
+uv run --frozen --env-file .env pytest -m integration tests/fdllm/integration -q
+```
+
+To intentionally refresh dependencies while avoiding packages published in the last 7 days, update the lockfile with uv's `exclude-newer` option:
+
+```shell
+uv lock --exclude-newer "7 days"
+uv sync --frozen
+```
+
+Do not set `exclude-newer = "7 days"` in global uv configuration for day-to-day work. uv snapshots that relative policy into `uv.lock` as a fixed timestamp, so it should only be applied when deliberately refreshing the lockfile.
+
 ### Configuration
 
 The package comes with a base model configuration which can be extended by user-provided custom configurations. You can get the base model configuration dictionary by:

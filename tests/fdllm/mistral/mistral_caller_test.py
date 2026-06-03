@@ -5,26 +5,15 @@ Tests cover initialization, message formatting, output parsing, and tokenization
 import pytest
 import json
 from types import SimpleNamespace, GeneratorType
-from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-from dotenv import load_dotenv
 
 from fdllm.mistralai import MistralCaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall
-from fdllm.sysutils import register_models
 
 try:
     from mistralai.models.chat_completion import ChatMessage
 except ImportError:
     pytest.skip("Mistral AI SDK not installed", allow_module_level=True)
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE.parent
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
-
-register_models(TEST_ROOT / "custom_models_test.yaml")
 
 TEST_MODEL = "mistral-large-azure"
 

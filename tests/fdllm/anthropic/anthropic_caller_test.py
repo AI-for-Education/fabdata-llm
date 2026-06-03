@@ -6,29 +6,21 @@ import pytest
 import json
 from types import SimpleNamespace, GeneratorType
 from typing import List
-from pathlib import Path
 from unittest.mock import Mock, patch
 from PIL import Image
 
 from pydantic import BaseModel
-from dotenv import load_dotenv
 
 from fdllm import ClaudeCaller
 from fdllm.anthropic import ClaudeStreamingCaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.tooluse import Tool, ToolParam, ToolItem
-from fdllm.sysutils import register_models
 
 try:
     from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
     from anthropic.types import Usage
 except ImportError:
     pytest.skip("Anthropic SDK not installed", allow_module_level=True)
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE.parent
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
 
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 
