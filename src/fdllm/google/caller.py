@@ -181,6 +181,7 @@ class GoogleGenAICaller(LLMCaller):
             "seed",
             "response_mime_type",
             "response_schema",
+            "thinking_config",
         ]:
             config[arg] = kwargs.pop(arg, None)
         if config.get("response_schema"):
