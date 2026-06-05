@@ -9,13 +9,13 @@ Google:
       Token_Window: 1048576
       Token_Limit_Completion: 8192
     gemini-test:
-      Api_Model_Name: models/gemini-2.0-flash
+      Api_Model_Name: models/gemini-2.5-flash
       Vision: True
       Document: True
       Token_Window: 1048576
       Token_Limit_Completion: 8192
     gemini-test-no-doc:
-      Api_Model_Name: models/gemini-2.0-flash
+      Api_Model_Name: models/gemini-2.5-flash
       Vision: True
       Document: False
       Token_Window: 1048576
@@ -31,10 +31,10 @@ Anthropic:
   Document: True
   models:
     claude-test:
-      Api_Model_Name: claude-3-5-sonnet-latest
+      Api_Model_Name: claude-haiku-4-5-20251001
       Token_Limit_Completion: 8192
     claude-test-no-doc:
-      Api_Model_Name: claude-3-5-sonnet-latest
+      Api_Model_Name: claude-haiku-4-5-20251001
       Token_Limit_Completion: 8192
       Document: False
 

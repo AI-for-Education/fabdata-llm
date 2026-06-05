@@ -5,23 +5,14 @@ Tests cover basic functionality, tools, images, special models, and metadata han
 import pytest
 import json
 from types import SimpleNamespace, GeneratorType
-from pathlib import Path
 from unittest.mock import patch
 from PIL import Image
-
-from dotenv import load_dotenv
 
 from fdllm import OpenAICaller
 from fdllm.openai.caller import OpenAICompletionsCaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.tooluse import Tool, ToolParam
-from fdllm.sysutils import register_models
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE.parent
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
 
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"
@@ -38,8 +29,6 @@ TEST_RESULT_OPENAI = SimpleNamespace(
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 TEST_MODELS = ["gpt-4.1-mini"]
 TEST_VISION_MODELS = ["gpt-4.1"]
-
-register_models(TEST_ROOT / "custom_models_test.yaml")
 
 
 # ===== Basic OpenAICaller Tests =====

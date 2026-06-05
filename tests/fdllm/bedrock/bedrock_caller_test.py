@@ -4,24 +4,13 @@ Tests cover initialization, message formatting, tools, images, system messages, 
 """
 import pytest
 from types import SimpleNamespace, GeneratorType
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 from PIL import Image
-
-from dotenv import load_dotenv
 
 from fdllm.bedrock import BedrockCaller
 from fdllm.bedrock.caller import tokenize_bedrock_messages, bedrock_async_wrapper
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.tooluse import Tool, ToolParam
-from fdllm.sysutils import register_models
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE.parent
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
-
-register_models(TEST_ROOT / "custom_models_test.yaml")
 
 TEST_MODEL = "bedrock-nova-micro"
 TEST_VISION_MODEL = "bedrock-nova-lite"

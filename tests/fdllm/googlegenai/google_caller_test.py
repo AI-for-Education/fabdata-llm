@@ -4,23 +4,12 @@ Tests cover message formatting, tools, images, system message handling, and outp
 """
 import pytest
 from types import SimpleNamespace, GeneratorType
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from PIL import Image
-
-from dotenv import load_dotenv
 
 from fdllm import GoogleGenAICaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.tooluse import Tool, ToolParam
-from fdllm.sysutils import register_models
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE.parent
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
-
-register_models(TEST_ROOT / "custom_models_test.yaml")
 
 
 # ===== Basic GoogleGenAICaller Tests =====
