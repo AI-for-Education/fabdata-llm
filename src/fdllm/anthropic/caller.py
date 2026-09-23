@@ -2,7 +2,6 @@ import os
 import logging
 from typing import List, Optional
 from types import GeneratorType
-from collections import deque
 import json
 import time
 
@@ -34,6 +33,20 @@ from tenacity import (
     after_log,
     before_sleep_log,
 )
+
+
+def _thinking_tokens(usage) -> int:
+    """Billed thinking tokens from usage.output_tokens_details.
+
+    Older SDKs don't declare the field, so it arrives as a pydantic extra
+    (a plain dict); newer SDKs may expose it as a typed object.
+    """
+    details = getattr(usage, "output_tokens_details", None)
+    if details is None:
+        return 0
+    if isinstance(details, dict):
+        return details.get("thinking_tokens") or 0
+    return getattr(details, "thinking_tokens", 0) or 0
 
 
 class ClaudeCaller(LLMCaller):
@@ -174,17 +187,13 @@ class ClaudeCaller(LLMCaller):
             if getattr(output, "content", None) is not None:
                 content = output.content
                 if isinstance(content[0], BetaThinkingBlock):
-                    thinking = content.pop(0)
-                    reasoning_tokens = self.count_tokens(
-                        [LLMMessage(Role="assistant", Message=thinking.thinking)]
-                    )
-                else:
-                    reasoning_tokens = 0
+                    content.pop(0)
                 #### token counts
                 usage = getattr(output, "usage", None)
                 if usage is not None:
                     total_tokens = usage.input_tokens + usage.output_tokens
                     completion_tokens = usage.output_tokens
+                    reasoning_tokens = _thinking_tokens(usage)
                 else:
                     total_tokens = None
                     completion_tokens = None
@@ -341,9 +350,16 @@ class ClaudeStreamingCaller(ClaudeCaller):
         def sync_streaming_retry(*args, **kwargs):
             start_time = time.perf_counter()
             with self.Func(*args, **kwargs) as stream:
-                deque(stream.text_stream, maxlen=0)
+                # the SDK's accumulator drops output_tokens_details from
+                # message_delta, so capture it from the raw events
+                details = None
+                for event in stream:
+                    if event.type == "message_delta":
+                        details = getattr(event.usage, "output_tokens_details", None)
                 out = stream.get_final_message()
             latency = time.perf_counter() - start_time
+            if details is not None and _thinking_tokens(out.usage) == 0:
+                out.usage.output_tokens_details = details
             return out, latency
 
         # Async streaming version with Tenacity
@@ -359,10 +375,14 @@ class ClaudeStreamingCaller(ClaudeCaller):
         async def async_streaming_retry(*args, **kwargs):
             start_time = time.perf_counter()
             async with self.AFunc(*args, **kwargs) as stream:
-                async for _ in stream.text_stream:
-                    pass
+                details = None
+                async for event in stream:
+                    if event.type == "message_delta":
+                        details = getattr(event.usage, "output_tokens_details", None)
                 out = await stream.get_final_message()
             latency = time.perf_counter() - start_time
+            if details is not None and _thinking_tokens(out.usage) == 0:
+                out.usage.output_tokens_details = details
             return out, latency
 
         # Override the base class retry methods with streaming versions
