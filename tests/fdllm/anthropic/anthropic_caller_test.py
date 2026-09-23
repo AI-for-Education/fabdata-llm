@@ -3,6 +3,7 @@ Tests for Anthropic ClaudeCaller and ClaudeStreamingCaller.
 Tests cover initialization, message formatting, tools, images, system messages, and output parsing.
 """
 import pytest
+import asyncio
 import json
 from types import SimpleNamespace, GeneratorType
 from typing import List
@@ -500,6 +501,14 @@ class TestFormatOutput:
         assert result.TokensUsedReasoning == 20
         assert not ct.called
 
+    def test_thinking_tokens_typed_details(self, caller):
+        """output_tokens_details as a typed object (newer SDKs) is read too."""
+        output = make_output([make_text_block("Answer")], output_tokens=30)
+        output.usage.output_tokens_details = SimpleNamespace(thinking_tokens=12)
+        result = caller.format_output(output)
+
+        assert result.TokensUsedReasoning == 12
+
     def test_with_thinking_text_then_tool_use(self, caller):
         """Test documented extended-thinking shape: thinking -> text -> tool_use."""
         thinking = BetaThinkingBlock(type="thinking", thinking="Need a tool", signature="sig")
@@ -658,27 +667,58 @@ class FakeStream:
         return self.final
 
 
+class FakeAsyncStream(FakeStream):
+    """Async version of FakeStream."""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def __aiter__(self):
+        for event in self.events:
+            yield event
+
+    async def get_final_message(self):
+        return self.final
+
+
+def make_stream_events():
+    """Stream events whose message_delta carries the thinking-token count."""
+    return [
+        SimpleNamespace(type="message_start"),
+        SimpleNamespace(
+            type="message_delta",
+            usage=Usage(
+                input_tokens=10,
+                output_tokens=30,
+                output_tokens_details={"thinking_tokens": 20},
+            ),
+        ),
+    ]
+
+
 class TestStreamingThinkingTokens:
     """Streaming caller recovers output_tokens_details from message_delta."""
 
     def test_sync_merges_thinking_tokens(self):
-        events = [
-            SimpleNamespace(type="message_start"),
-            SimpleNamespace(
-                type="message_delta",
-                usage=Usage(
-                    input_tokens=10,
-                    output_tokens=30,
-                    output_tokens_details={"thinking_tokens": 20},
-                ),
-            ),
-        ]
         final = make_output([make_text_block("Answer")], output_tokens=30)
         caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
-        caller.Func = lambda *a, **k: FakeStream(events, final)
+        caller.Func = lambda *a, **k: FakeStream(make_stream_events(), final)
         caller._create_streaming_retry_methods()
 
         out, _ = caller._sync_call_with_retry()
+
+        assert caller.format_output(out).TokensUsedReasoning == 20
+
+    def test_async_merges_thinking_tokens(self):
+        final = make_output([make_text_block("Answer")], output_tokens=30)
+        caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
+        caller.AFunc = lambda *a, **k: FakeAsyncStream(make_stream_events(), final)
+        caller._create_streaming_retry_methods()
+
+        out, _ = asyncio.run(caller._async_call_with_retry())
 
         assert caller.format_output(out).TokensUsedReasoning == 20
 
