@@ -18,7 +18,7 @@ dependencies = [
     "mistralai>=0.1.0, <0.3",
     "google-auth==2.49.*",
     "google-genai==1.70.0",
-    "openai>=1.61.0, <2",
+    "openai>=1.61.0, <4",
     "anthropic>=0.40.0, <1",
     "tiktoken==0.12.*",
     "boto3>=1.35.0, <1.36",
