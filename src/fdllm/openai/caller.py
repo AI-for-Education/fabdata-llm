@@ -225,6 +225,10 @@ def _gpt_common_fmt_output(output, latency):
                 TokensUsedCompletion=output.usage.completion_tokens,
                 TokensUsedReasoning=reasoning_tokens,
             )
+        if not getattr(output, "choices", None):
+            raise ValueError(
+                f"Empty response from {getattr(output, 'model', None)}: no choices"
+            )
         msg = output.choices[0].message
         logprobs = getattr(output.choices[0], "logprobs", None)
         if msg.content is not None:

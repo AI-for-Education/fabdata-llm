@@ -598,16 +598,34 @@ class TestFormatOutput:
         assert isinstance(result, GeneratorType)
 
     def test_empty_content_raises(self, caller):
-        """Test format_output with empty content list raises IndexError."""
+        """Test format_output with empty content list raises ValueError."""
         output = make_output([])
-        with pytest.raises(IndexError):
+        output.stop_reason = "end_turn"
+        with pytest.raises(
+            ValueError, match=r"no content blocks \(stop_reason='end_turn'\)"
+        ):
             caller.format_output(output)
 
     def test_none_content_raises(self, caller):
-        """Test format_output with None content raises UnboundLocalError."""
+        """Test format_output with None content raises ValueError."""
         output = SimpleNamespace(content=None)
-        with pytest.raises(UnboundLocalError):
+        with pytest.raises(ValueError, match="no content blocks"):
             caller.format_output(output)
+
+    def test_thinking_only_content_raises(self, caller):
+        """Test format_output with only a thinking block raises ValueError."""
+        thinking = BetaThinkingBlock(type="thinking", thinking="Hmm...", signature="sig")
+        output = make_output([thinking])
+        output.stop_reason = "max_tokens"
+        with (
+            patch.object(caller.Client.beta.messages, "count_tokens") as count_tokens,
+            pytest.raises(
+                ValueError,
+                match=r"only a thinking block was returned \(stop_reason='max_tokens'\)",
+            ),
+        ):
+            caller.format_output(output)
+        count_tokens.assert_not_called()
 
 
 # ============================================================================

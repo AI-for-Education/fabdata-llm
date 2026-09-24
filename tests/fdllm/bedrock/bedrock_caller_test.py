@@ -367,6 +367,27 @@ def test_format_output_text_response(mock_aioboto3, mock_boto3):
     assert result.Latency == 1.5
 
 
+@pytest.mark.parametrize("stop_reason", ["end_turn", "tool_use"])
+@patch('fdllm.bedrock.caller.boto3')
+@patch('fdllm.bedrock.caller.aioboto3')
+def test_format_output_empty_content(mock_aioboto3, mock_boto3, stop_reason):
+    """Test format_output raises on an empty content list instead of returning ''."""
+    mock_boto3.client.return_value = MagicMock()
+    mock_aioboto3.session.Session.return_value.client.return_value = MagicMock()
+
+    caller = BedrockCaller(model=TEST_MODEL)
+
+    output = {
+        "output": {"message": {"content": []}},
+        "stopReason": stop_reason,
+    }
+
+    with pytest.raises(
+        ValueError, match=rf"no content blocks \(stopReason='{stop_reason}'\)"
+    ):
+        caller.format_output(output)
+
+
 @patch('fdllm.bedrock.caller.boto3')
 @patch('fdllm.bedrock.caller.aioboto3')
 def test_format_output_text_with_leading_whitespace(mock_aioboto3, mock_boto3):

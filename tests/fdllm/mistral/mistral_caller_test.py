@@ -186,6 +186,17 @@ def test_format_output_invalid():
         caller.format_output(output)
 
 
+@pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])
+def test_format_output_no_choices(choices):
+    """Test format_output with an empty or missing choices list."""
+    caller = MistralCaller(model=TEST_MODEL)
+
+    output = SimpleNamespace(choices=choices)
+
+    with pytest.raises(ValueError, match="no choices"):
+        caller.format_output(output)
+
+
 def test_format_output_generator():
     """Test format_output with generator type."""
     caller = MistralCaller(model=TEST_MODEL)

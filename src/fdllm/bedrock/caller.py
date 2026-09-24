@@ -204,6 +204,11 @@ class BedrockCaller(LLMCaller):
             return output
         else:
             content = output["output"]["message"]["content"]
+            if not content:
+                raise ValueError(
+                    f"Empty response from {self.Model.Name}: no content blocks "
+                    f"(stopReason={output.get('stopReason')!r})"
+                )
             if output["stopReason"] == "tool_use":
                 tool_calls = [c["toolUse"] for c in content if "toolUse" in c]
                 tcs = [

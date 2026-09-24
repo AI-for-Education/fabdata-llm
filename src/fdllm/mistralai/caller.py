@@ -64,6 +64,8 @@ class MistralCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
+            if not getattr(output, "choices", None):
+                raise ValueError(f"Empty response from {self.Model.Name}: no choices")
             msg = output.choices[0].message
             if msg.content:
                 return LLMMessage(

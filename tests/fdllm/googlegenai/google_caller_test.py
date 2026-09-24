@@ -490,6 +490,52 @@ def test_format_output_invalid():
             caller.format_output(output)
 
 
+def test_format_output_no_candidates():
+    """Test format_output with an empty candidates list (e.g. blocked prompt)"""
+    caller = GoogleGenAICaller(model="gemini-2.0-flash")
+
+    output = SimpleNamespace(
+        candidates=[],
+        prompt_feedback=SimpleNamespace(block_reason="SAFETY"),
+        usage_metadata=None,
+    )
+
+    with pytest.raises(
+        ValueError, match=r"no candidates \(block_reason='SAFETY'\)"
+    ):
+        caller.format_output(output)
+
+
+def test_format_output_none_candidates():
+    """Test format_output when candidates is None"""
+    caller = GoogleGenAICaller(model="gemini-2.0-flash")
+
+    output = SimpleNamespace(candidates=None, usage_metadata=None)
+
+    with pytest.raises(ValueError, match="no candidates"):
+        caller.format_output(output)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [None, SimpleNamespace(parts=None), SimpleNamespace(parts=[])],
+    ids=["content_none", "parts_none", "parts_empty"],
+)
+def test_format_output_no_parts(content):
+    """Test format_output when the candidate has no content parts"""
+    caller = GoogleGenAICaller(model="gemini-2.0-flash")
+
+    candidate = SimpleNamespace(
+        content=content, logprobs_result=None, finish_reason="SAFETY"
+    )
+    output = SimpleNamespace(candidates=[candidate], usage_metadata=None)
+
+    with pytest.raises(
+        ValueError, match=r"no content parts \(finish_reason='SAFETY'\)"
+    ):
+        caller.format_output(output)
+
+
 def test_format_output_generator():
     """Test format_output with generator type"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")

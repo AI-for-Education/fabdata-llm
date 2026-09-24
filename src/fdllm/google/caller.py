@@ -211,8 +211,24 @@ class GoogleGenAICaller(LLMCaller):
             else:
                 token_count_kwargs = {}
             #####
-            parts = getattr(output.candidates[0].content, "parts", None)
-            logprobs_result = getattr(output.candidates[0], "logprobs_result", None)
+            candidates = getattr(output, "candidates", None)
+            if not candidates:
+                block_reason = getattr(
+                    getattr(output, "prompt_feedback", None), "block_reason", None
+                )
+                raise ValueError(
+                    f"Empty response from {self.Model.Name}: no candidates "
+                    f"(block_reason={block_reason!r})"
+                )
+            candidate = candidates[0]
+            parts = getattr(getattr(candidate, "content", None), "parts", None)
+            if not parts:
+                finish_reason = getattr(candidate, "finish_reason", None)
+                raise ValueError(
+                    f"Empty response from {self.Model.Name}: no content parts "
+                    f"(finish_reason={finish_reason!r})"
+                )
+            logprobs_result = getattr(candidate, "logprobs_result", None)
             if logprobs_result is not None:
                 logprobs = ChoiceLogprobs(
                     content=[
@@ -234,7 +250,7 @@ class GoogleGenAICaller(LLMCaller):
                 )
             else:
                 logprobs = None
-            if parts is not None and getattr(parts[0], "text", None) is not None:
+            if getattr(parts[0], "text", None) is not None:
                 return LLMMessage(
                     Role="assistant",
                     Message=parts[0].text,
@@ -242,10 +258,7 @@ class GoogleGenAICaller(LLMCaller):
                     Latency=latency,
                     **token_count_kwargs,
                 )
-            elif (
-                parts is not None
-                and getattr(parts[0], "function_call", None) is not None
-            ):
+            elif getattr(parts[0], "function_call", None) is not None:
                 tcs = [
                     LLMToolCall(
                         ID=p.function_call.id,
