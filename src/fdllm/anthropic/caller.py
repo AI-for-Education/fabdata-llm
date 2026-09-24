@@ -184,83 +184,97 @@ class ClaudeCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
-            if getattr(output, "content", None) is not None:
-                content = output.content
-                if isinstance(content[0], BetaThinkingBlock):
-                    content.pop(0)
-                #### token counts
-                usage = getattr(output, "usage", None)
-                if usage is not None:
-                    total_tokens = usage.input_tokens + usage.output_tokens
-                    completion_tokens = usage.output_tokens
-                    reasoning_tokens = _thinking_tokens(usage)
-                else:
-                    total_tokens = None
-                    completion_tokens = None
-                    reasoning_tokens = None
-                token_count_kwargs = dict(
-                    TokensUsed=total_tokens,
-                    TokensUsedCompletion=completion_tokens,
-                    TokensUsedReasoning=reasoning_tokens,
+            content = getattr(output, "content", None)
+            stop_reason = getattr(output, "stop_reason", None)
+            if not content:
+                raise ValueError(
+                    f"Empty response from {self.Model.Name}: no content blocks "
+                    f"(stop_reason={stop_reason!r})"
                 )
-                if isinstance(content[0], BetaToolUseBlock):
-                    if response_schema is not None:
-                        ### if the user has set a response_schema then the tool use block is
-                        ### to be processed as an output format, not as a tool call
-                        structured_json = output.content[0].input
-                        formatted_content = json.dumps(structured_json)
-                        out = LLMMessage(
-                            Role="assistant",
-                            Message=formatted_content,
-                            Latency=latency,
-                            **token_count_kwargs,
-                        )
-                    else:
-                        # otherwise it should be processed as a tool call
-                        out = LLMMessage(
-                            Role="assistant",
-                            Message="",
-                            Latency=latency,
-                            **token_count_kwargs,
-                        )
-                        # Process ALL content items as tool calls
-                        # Anthropic documents tool-first responses such as
-                        # thinking -> tool_use and multiple tool_use blocks.
-                        # If they later expand this branch to allow trailing
-                        # non-tool blocks after a tool-first start, revisit
-                        # this loop and add coverage for that ordering.
-                        out.ToolCalls = []
-                        for tcout in content:
-                            tc = LLMToolCall(
-                                ID=tcout.id,
-                                Name=tcout.name,
-                                Args=tcout.input,
-                            )
-                            out.ToolCalls.append(tc)
-                        return out
-                else:
-                    text = "".join(
-                        b.text for b in content if isinstance(b, BetaTextBlock)
-                    ).strip()
+            if isinstance(content[0], BetaThinkingBlock):
+                thinking = content.pop(0)
+                if not content:
+                    raise ValueError(
+                        f"Empty response from {self.Model.Name}: only a thinking "
+                        f"block was returned (stop_reason={stop_reason!r})"
+                    )
+                reasoning_tokens = self.count_tokens(
+                    [LLMMessage(Role="assistant", Message=thinking.thinking)]
+                )
+            else:
+                reasoning_tokens = 0
+            #### token counts
+            usage = getattr(output, "usage", None)
+            if usage is not None:
+                total_tokens = usage.input_tokens + usage.output_tokens
+                completion_tokens = usage.output_tokens
+            else:
+                total_tokens = None
+                completion_tokens = None
+                reasoning_tokens = None
+            token_count_kwargs = dict(
+                TokensUsed=total_tokens,
+                TokensUsedCompletion=completion_tokens,
+                TokensUsedReasoning=reasoning_tokens,
+            )
+            if isinstance(content[0], BetaToolUseBlock):
+                if response_schema is not None:
+                    ### if the user has set a response_schema then the tool use block is
+                    ### to be processed as an output format, not as a tool call
+                    structured_json = output.content[0].input
+                    formatted_content = json.dumps(structured_json)
                     out = LLMMessage(
                         Role="assistant",
-                        Message=text,
+                        Message=formatted_content,
                         Latency=latency,
                         **token_count_kwargs,
                     )
-                if len(content) > 1:
-                    tool_blocks = [
-                        b for b in content[1:] if isinstance(b, BetaToolUseBlock)
-                    ]
-                    if tool_blocks:
-                        out.ToolCalls = []
-                        for tcout in tool_blocks:
-                            tc = LLMToolCall(
-                                ID=tcout.id,
-                                Name=tcout.name,
-                                Args=tcout.input,
-                            )
-                            out.ToolCalls.append(tc)
+                else:
+                    # otherwise it should be processed as a tool call
+                    out = LLMMessage(
+                        Role="assistant",
+                        Message="",
+                        Latency=latency,
+                        **token_count_kwargs,
+                    )
+                    # Process ALL content items as tool calls
+                    # Anthropic documents tool-first responses such as
+                    # thinking -> tool_use and multiple tool_use blocks.
+                    # If they later expand this branch to allow trailing
+                    # non-tool blocks after a tool-first start, revisit
+                    # this loop and add coverage for that ordering.
+                    out.ToolCalls = []
+                    for tcout in content:
+                        tc = LLMToolCall(
+                            ID=tcout.id,
+                            Name=tcout.name,
+                            Args=tcout.input,
+                        )
+                        out.ToolCalls.append(tc)
+                    return out
+            else:
+                text = "".join(
+                    b.text for b in content if isinstance(b, BetaTextBlock)
+                ).strip()
+                out = LLMMessage(
+                    Role="assistant",
+                    Message=text,
+                    Latency=latency,
+                    **token_count_kwargs,
+                )
+            if len(content) > 1:
+                tool_blocks = [
+                    b for b in content[1:] if isinstance(b, BetaToolUseBlock)
+                ]
+                if tool_blocks:
+                    out.ToolCalls = []
+                    for tcout in tool_blocks:
+                        tc = LLMToolCall(
+                            ID=tcout.id,
+                            Name=tcout.name,
+                            Args=tcout.input,
+                        )
+                        out.ToolCalls.append(tc)
             return out
 
     def format_tool(self, tool: Tool):
