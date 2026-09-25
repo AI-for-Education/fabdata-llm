@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from fdllm.mistralai import MistralCaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall
+from fdllm.errors import EmptyLLMResponse
 
 try:
     from mistralai.models.chat_completion import ChatMessage
@@ -184,6 +185,19 @@ def test_format_output_invalid():
 
     with pytest.raises(ValueError, match="Output must be either content or tool call"):
         caller.format_output(output)
+
+
+@pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])
+def test_format_output_no_choices(choices):
+    """Test format_output with an empty or missing choices list."""
+    caller = MistralCaller(model=TEST_MODEL)
+
+    output = SimpleNamespace(choices=choices)
+
+    with pytest.raises(EmptyLLMResponse, match="no choices") as exc_info:
+        caller.format_output(output)
+    assert exc_info.value.provider == "mistral"
+    assert exc_info.value.retryable is True
 
 
 def test_format_output_generator():

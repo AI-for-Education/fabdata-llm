@@ -16,6 +16,7 @@ from fdllm import ClaudeCaller
 from fdllm.anthropic import ClaudeStreamingCaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.tooluse import Tool, ToolParam, ToolItem
+from fdllm.errors import EmptyLLMResponse, LLMContentFiltered
 
 try:
     from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
@@ -603,16 +604,56 @@ class TestFormatOutput:
         assert isinstance(result, GeneratorType)
 
     def test_empty_content_raises(self, caller):
-        """Test format_output with empty content list raises IndexError."""
+        """Test format_output with empty content list raises ValueError."""
         output = make_output([])
-        with pytest.raises(IndexError):
+        output.stop_reason = "end_turn"
+        output.id = "msg_123"
+        with pytest.raises(EmptyLLMResponse, match="no content blocks") as exc_info:
             caller.format_output(output)
 
-    def test_none_content_raises(self, caller):
-        """Test format_output with None content raises UnboundLocalError."""
-        output = SimpleNamespace(content=None)
-        with pytest.raises(UnboundLocalError):
+        err = exc_info.value
+        assert type(err) is EmptyLLMResponse
+        assert err.retryable is True
+        assert err.metadata == {
+            "provider": "anthropic",
+            "model": DEFAULT_CLAUDE_MODEL,
+            "response_id": "msg_123",
+            "stop_reason": "end_turn",
+            "block_types": [],
+            "usage": {"input_tokens": 10, "output_tokens": 10},
+            "retryable": True,
+        }
+
+    def test_empty_content_refusal_raises_content_filtered(self, caller):
+        """Test an empty response with stop_reason 'refusal' is not retryable."""
+        output = make_output([])
+        output.stop_reason = "refusal"
+        with pytest.raises(LLMContentFiltered) as exc_info:
             caller.format_output(output)
+        assert exc_info.value.retryable is False
+
+    def test_none_content_raises(self, caller):
+        """Test format_output with None content raises ValueError."""
+        output = SimpleNamespace(content=None)
+        with pytest.raises(EmptyLLMResponse, match="no content blocks"):
+            caller.format_output(output)
+
+    def test_thinking_only_content_raises(self, caller):
+        """Test a thinking-only response that hit max_tokens is not retryable."""
+        thinking = BetaThinkingBlock(type="thinking", thinking="Hmm...", signature="sig")
+        output = make_output([thinking])
+        output.stop_reason = "max_tokens"
+        with pytest.raises(
+            EmptyLLMResponse, match="only a thinking block was returned"
+        ) as exc_info:
+            caller.format_output(output)
+
+        err = exc_info.value
+        assert err.retryable is False
+        assert err.stop_reason == "max_tokens"
+        assert err.block_types == ["thinking"]
+        # metadata and message never carry generated text
+        assert "Hmm..." not in str(err)
 
 
 # ============================================================================

@@ -31,6 +31,13 @@ from ..llmtypes import (
     LLMDocument,
 )
 from ..tooluse import Tool
+from ..errors import (
+    EmptyLLMResponse,
+    InvalidProviderResponse,
+    LLMContentFiltered,
+    empty_response_error,
+    safe_usage,
+)
 
 
 class OpenAICaller(LLMCaller):
@@ -159,7 +166,7 @@ class OpenAICaller(LLMCaller):
         response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
-        return _gpt_common_fmt_output(output, latency)
+        return _gpt_common_fmt_output(output, latency, model=self.Model.Name)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         if self.Model.Vision:
@@ -207,7 +214,7 @@ class OpenAICaller(LLMCaller):
         return kwargs
 
 
-def _gpt_common_fmt_output(output, latency):
+def _gpt_common_fmt_output(output, latency, model=None):
     if isinstance(output, GeneratorType):
         return output
     else:
@@ -225,6 +232,17 @@ def _gpt_common_fmt_output(output, latency):
                 TokensUsedCompletion=output.usage.completion_tokens,
                 TokensUsedReasoning=reasoning_tokens,
             )
+        error_meta = dict(
+            provider="openai",
+            model=model or getattr(output, "model", None),
+            response_id=getattr(output, "id", None),
+            usage=safe_usage(
+                usage, "prompt_tokens", "completion_tokens", "total_tokens"
+            ),
+        )
+        if not getattr(output, "choices", None):
+            raise EmptyLLMResponse("Empty response: no choices", **error_meta)
+        error_meta["stop_reason"] = getattr(output.choices[0], "finish_reason", None)
         msg = output.choices[0].message
         logprobs = getattr(output.choices[0], "logprobs", None)
         if msg.content is not None:
@@ -251,8 +269,13 @@ def _gpt_common_fmt_output(output, latency):
                 LogProbs=logprobs,
                 Latency=latency,
             )
+        elif getattr(msg, "refusal", None):
+            # the refusal text is model output, so it is not attached to the error
+            raise LLMContentFiltered("The model refused to respond", **error_meta)
         else:
-            raise ValueError("Output must be either content or tool call")
+            raise empty_response_error(
+                "Output must be either content or tool call", **error_meta
+            )
 
 
 class OpenAICompletionsCaller(OpenAICaller):
@@ -353,6 +376,17 @@ class OpenAICompletionsCaller(OpenAICaller):
             return output
         else:
             # Completions API returns text in choices[0].text instead of choices[0].message.content
+            error_meta = dict(
+                provider="openai",
+                model=self.Model.Name,
+                response_id=getattr(output, "id", None),
+                usage=safe_usage(
+                    getattr(output, "usage", None),
+                    "prompt_tokens",
+                    "completion_tokens",
+                    "total_tokens",
+                ),
+            )
             if hasattr(output, "choices") and len(output.choices) > 0:
                 choice = output.choices[0]
                 if hasattr(choice, "text"):
@@ -360,9 +394,13 @@ class OpenAICompletionsCaller(OpenAICaller):
                         Role="assistant", Message=choice.text, Latency=latency
                     )
                 else:
-                    raise ValueError("Unexpected completions API response format")
+                    raise InvalidProviderResponse(
+                        "Unexpected completions API response format",
+                        stop_reason=getattr(choice, "finish_reason", None),
+                        **error_meta,
+                    )
             else:
-                raise ValueError("Invalid completions API response")
+                raise EmptyLLMResponse("Invalid completions API response", **error_meta)
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         """Process call arguments for the completions API."""

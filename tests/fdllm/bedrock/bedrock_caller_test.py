@@ -11,6 +11,7 @@ from fdllm.bedrock import BedrockCaller
 from fdllm.bedrock.caller import tokenize_bedrock_messages, bedrock_async_wrapper
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.tooluse import Tool, ToolParam
+from fdllm.errors import EmptyLLMResponse, LLMContentFiltered
 
 TEST_MODEL = "bedrock-nova-micro"
 TEST_VISION_MODEL = "bedrock-nova-lite"
@@ -365,6 +366,49 @@ def test_format_output_text_response(mock_aioboto3, mock_boto3):
     assert result.Role == "assistant"
     assert result.Message == "Test response"
     assert result.Latency == 1.5
+
+
+@pytest.mark.parametrize(
+    "stop_reason, error_cls, retryable",
+    [
+        ("end_turn", EmptyLLMResponse, True),
+        ("tool_use", EmptyLLMResponse, True),
+        ("max_tokens", EmptyLLMResponse, False),
+        ("guardrail_intervened", LLMContentFiltered, False),
+    ],
+)
+@patch('fdllm.bedrock.caller.boto3')
+@patch('fdllm.bedrock.caller.aioboto3')
+def test_format_output_empty_content(
+    mock_aioboto3, mock_boto3, stop_reason, error_cls, retryable
+):
+    """Test format_output raises on an empty content list instead of returning ''."""
+    mock_boto3.client.return_value = MagicMock()
+    mock_aioboto3.session.Session.return_value.client.return_value = MagicMock()
+
+    caller = BedrockCaller(model=TEST_MODEL)
+
+    output = {
+        "output": {"message": {"content": []}},
+        "stopReason": stop_reason,
+        "usage": {"inputTokens": 7, "outputTokens": 0, "totalTokens": 7},
+        "ResponseMetadata": {"RequestId": "req-1"},
+    }
+
+    with pytest.raises(error_cls, match="no content blocks") as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is error_cls
+    assert err.metadata == {
+        "provider": "bedrock",
+        "model": TEST_MODEL,
+        "response_id": "req-1",
+        "stop_reason": stop_reason,
+        "block_types": [],
+        "usage": {"inputTokens": 7, "outputTokens": 0, "totalTokens": 7},
+        "retryable": retryable,
+    }
 
 
 @patch('fdllm.bedrock.caller.boto3')
