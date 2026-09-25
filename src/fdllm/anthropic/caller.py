@@ -23,6 +23,7 @@ from ..llmtypes import (
     LLMDocument,
 )
 from ..tooluse import Tool
+from ..errors import empty_response_error, safe_usage
 from ..decorators import delayedretry
 from tenacity import (
     retry,
@@ -185,29 +186,31 @@ class ClaudeCaller(LLMCaller):
             return output
         else:
             content = getattr(output, "content", None)
-            stop_reason = getattr(output, "stop_reason", None)
+            error_meta = dict(
+                provider="anthropic",
+                model=self.Model.Name,
+                response_id=getattr(output, "id", None),
+                stop_reason=getattr(output, "stop_reason", None),
+                block_types=[getattr(b, "type", type(b).__name__) for b in content or []],
+                usage=safe_usage(
+                    getattr(output, "usage", None), "input_tokens", "output_tokens"
+                ),
+            )
             if not content:
-                raise ValueError(
-                    f"Empty response from {self.Model.Name}: no content blocks "
-                    f"(stop_reason={stop_reason!r})"
-                )
+                raise empty_response_error("Empty response: no content blocks", **error_meta)
             if isinstance(content[0], BetaThinkingBlock):
-                thinking = content.pop(0)
+                content.pop(0)
                 if not content:
-                    raise ValueError(
-                        f"Empty response from {self.Model.Name}: only a thinking "
-                        f"block was returned (stop_reason={stop_reason!r})"
+                    raise empty_response_error(
+                        "Empty response: only a thinking block was returned",
+                        **error_meta,
                     )
-                reasoning_tokens = self.count_tokens(
-                    [LLMMessage(Role="assistant", Message=thinking.thinking)]
-                )
-            else:
-                reasoning_tokens = 0
             #### token counts
             usage = getattr(output, "usage", None)
             if usage is not None:
                 total_tokens = usage.input_tokens + usage.output_tokens
                 completion_tokens = usage.output_tokens
+                reasoning_tokens = _thinking_tokens(usage)
             else:
                 total_tokens = None
                 completion_tokens = None

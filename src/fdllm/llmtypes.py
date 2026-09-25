@@ -37,16 +37,24 @@ from .logging_utils import get_logger, log_call_start, log_call_completion
 
 # Tenacity imports for superior retry functionality
 from tenacity import (
-    retry, 
-    stop_after_attempt, 
-    wait_exponential, 
+    retry,
+    stop_after_attempt,
+    wait_exponential,
     retry_if_exception_type,
+    retry_if_exception,
     before_log,
-    after_log, 
-    before_sleep_log
+    after_log,
+    before_sleep_log,
+    Retrying,
+    AsyncRetrying,
 )
 from .openai.tokenizer import tokenize_chatgpt_messages
-from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
+from .errors import is_retryable_response_error
+from .constants import (
+    LLM_DEFAULT_MAX_TOKENS,
+    LLM_DEFAULT_MAX_RETRIES,
+    LLM_DEFAULT_MAX_RESPONSE_RETRIES,
+)
 from .sysutils import load_models, deepmerge_dicts, get_google_token
 
 
@@ -394,6 +402,22 @@ class LLMCaller(ABC, BaseModel):
         self._sync_call_with_retry = sync_retry_wrapper
         self._async_call_with_retry = async_retry_wrapper
 
+    def _response_retry_kwargs(self):
+        """Tenacity settings for re-sending a request whose response was unusable.
+
+        Only LLMResponseErrors flagged as retryable (e.g. a transient empty
+        response) are retried; content filtering, token exhaustion and invalid
+        response shapes are raised immediately. Transport errors are retried
+        separately inside each attempt by _sync/_async_call_with_retry.
+        """
+        return dict(
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RESPONSE_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=10),
+            retry=retry_if_exception(is_retryable_response_error),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING),
+            reraise=True,
+        )
+
     @abstractmethod
     def format_message(self, message: LLMMessage):
         pass
@@ -443,8 +467,10 @@ class LLMCaller(ABC, BaseModel):
         
         try:
             kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-            response, latency = self._call(**kwargs)
-            formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
+            for attempt in Retrying(**self._response_retry_kwargs()):
+                with attempt:
+                    response, latency = self._call(**kwargs)
+                    formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
             
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)
@@ -469,8 +495,10 @@ class LLMCaller(ABC, BaseModel):
         
         try:
             kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-            response, latency = await self._acall(**kwargs)
-            formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
+            async for attempt in AsyncRetrying(**self._response_retry_kwargs()):
+                with attempt:
+                    response, latency = await self._acall(**kwargs)
+                    formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
             
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)

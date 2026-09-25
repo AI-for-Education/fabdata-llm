@@ -19,6 +19,7 @@ from ..llmtypes import (
 )
 from ..constants import LLM_DEFAULT_MAX_TOKENS
 from ..tooluse import Tool
+from ..errors import empty_response_error, safe_usage
 
 encoding = tiktoken.get_encoding("gpt2")
 
@@ -205,9 +206,16 @@ class BedrockCaller(LLMCaller):
         else:
             content = output["output"]["message"]["content"]
             if not content:
-                raise ValueError(
-                    f"Empty response from {self.Model.Name}: no content blocks "
-                    f"(stopReason={output.get('stopReason')!r})"
+                raise empty_response_error(
+                    "Empty response: no content blocks",
+                    provider="bedrock",
+                    model=self.Model.Name,
+                    response_id=output.get("ResponseMetadata", {}).get("RequestId"),
+                    stop_reason=output.get("stopReason"),
+                    block_types=[],
+                    usage=safe_usage(
+                        output.get("usage"), "inputTokens", "outputTokens", "totalTokens"
+                    ),
                 )
             if output["stopReason"] == "tool_use":
                 tool_calls = [c["toolUse"] for c in content if "toolUse" in c]

@@ -7,7 +7,10 @@ from types import SimpleNamespace, GeneratorType
 from unittest.mock import Mock, patch, MagicMock
 from PIL import Image
 
+from google.genai.types import BlockedReason, FinishReason
+
 from fdllm import GoogleGenAICaller
+from fdllm.errors import EmptyLLMResponse, InvalidProviderResponse, LLMContentFiltered
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.tooluse import Tool, ToolParam
 
@@ -496,24 +499,41 @@ def test_format_output_no_candidates():
 
     output = SimpleNamespace(
         candidates=[],
-        prompt_feedback=SimpleNamespace(block_reason="SAFETY"),
-        usage_metadata=None,
+        prompt_feedback=SimpleNamespace(block_reason=BlockedReason.SAFETY),
+        response_id="resp_1",
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=12,
+            candidates_token_count=None,
+            thoughts_token_count=None,
+            total_token_count=12,
+        ),
     )
 
-    with pytest.raises(
-        ValueError, match=r"no candidates \(block_reason='SAFETY'\)"
-    ):
+    with pytest.raises(LLMContentFiltered, match="no candidates") as exc_info:
         caller.format_output(output)
+
+    err = exc_info.value
+    assert err.retryable is False
+    assert err.metadata == {
+        "provider": "google",
+        "model": "gemini-2.0-flash",
+        "response_id": "resp_1",
+        "usage": {"prompt_token_count": 12, "total_token_count": 12},
+        "details": {"block_reason": "SAFETY"},
+        "retryable": False,
+    }
 
 
 def test_format_output_none_candidates():
-    """Test format_output when candidates is None"""
+    """Test format_output when candidates is None and the prompt was not blocked"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     output = SimpleNamespace(candidates=None, usage_metadata=None)
 
-    with pytest.raises(ValueError, match="no candidates"):
+    with pytest.raises(EmptyLLMResponse, match="no candidates") as exc_info:
         caller.format_output(output)
+    assert type(exc_info.value) is EmptyLLMResponse
+    assert exc_info.value.retryable is True
 
 
 @pytest.mark.parametrize(
@@ -521,19 +541,47 @@ def test_format_output_none_candidates():
     [None, SimpleNamespace(parts=None), SimpleNamespace(parts=[])],
     ids=["content_none", "parts_none", "parts_empty"],
 )
-def test_format_output_no_parts(content):
+@pytest.mark.parametrize(
+    "finish_reason, error_cls, retryable",
+    [
+        (FinishReason.SAFETY, LLMContentFiltered, False),
+        (FinishReason.MAX_TOKENS, EmptyLLMResponse, False),
+        (FinishReason.STOP, EmptyLLMResponse, True),
+    ],
+)
+def test_format_output_no_parts(content, finish_reason, error_cls, retryable):
     """Test format_output when the candidate has no content parts"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     candidate = SimpleNamespace(
-        content=content, logprobs_result=None, finish_reason="SAFETY"
+        content=content, logprobs_result=None, finish_reason=finish_reason
     )
     output = SimpleNamespace(candidates=[candidate], usage_metadata=None)
 
-    with pytest.raises(
-        ValueError, match=r"no content parts \(finish_reason='SAFETY'\)"
-    ):
+    with pytest.raises(error_cls, match="no content parts") as exc_info:
         caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is error_cls
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason.value
+    assert err.block_types == []
+
+
+def test_format_output_unknown_part_is_invalid():
+    """Test a part with neither text nor function_call raises InvalidProviderResponse"""
+    caller = GoogleGenAICaller(model="gemini-2.0-flash")
+
+    part = SimpleNamespace(text=None, function_call=None, inline_data=object())
+    candidate = SimpleNamespace(
+        content=SimpleNamespace(parts=[part]), logprobs_result=None
+    )
+    output = SimpleNamespace(candidates=[candidate], usage_metadata=None)
+
+    with pytest.raises(InvalidProviderResponse) as exc_info:
+        caller.format_output(output)
+    assert exc_info.value.retryable is False
+    assert exc_info.value.block_types == ["inline_data"]
 
 
 def test_format_output_generator():

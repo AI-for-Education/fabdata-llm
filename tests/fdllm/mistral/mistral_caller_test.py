@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from fdllm.mistralai import MistralCaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall
+from fdllm.errors import EmptyLLMResponse
 
 try:
     from mistralai.models.chat_completion import ChatMessage
@@ -193,8 +194,10 @@ def test_format_output_no_choices(choices):
 
     output = SimpleNamespace(choices=choices)
 
-    with pytest.raises(ValueError, match="no choices"):
+    with pytest.raises(EmptyLLMResponse, match="no choices") as exc_info:
         caller.format_output(output)
+    assert exc_info.value.provider == "mistral"
+    assert exc_info.value.retryable is True
 
 
 def test_format_output_generator():
