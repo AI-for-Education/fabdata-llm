@@ -1,5 +1,5 @@
 """
-Tests for typed response errors and the response-level retry in LLMCaller.call/acall.
+Tests for typed response errors and the shared retry loop in LLMCaller.call/acall.
 """
 import asyncio
 from types import SimpleNamespace
@@ -7,10 +7,12 @@ from types import SimpleNamespace
 import pytest
 from tenacity import wait_none
 
+import httpx
 from google.genai.types import FinishReason
+from openai import APIConnectionError
 
 from fdllm import OpenAICaller
-from fdllm.constants import LLM_DEFAULT_MAX_RESPONSE_RETRIES
+from fdllm.constants import LLM_DEFAULT_MAX_RETRIES
 from fdllm.errors import (
     EmptyLLMResponse,
     InvalidProviderResponse,
@@ -95,7 +97,7 @@ def test_safe_usage_keeps_only_int_counts():
     assert safe_usage(SimpleNamespace(), "a") is None
 
 
-# ===== Response-level retry in call / acall =====
+# ===== Shared retry loop in call / acall =====
 
 def _ok_response():
     return SimpleNamespace(
@@ -135,7 +137,10 @@ def _caller_returning(responses):
 
     def func(**kwargs):
         calls.append(kwargs)
-        return responses[len(calls) - 1]
+        response = responses[len(calls) - 1]
+        if isinstance(response, BaseException):
+            raise response
+        return response
 
     async def afunc(**kwargs):
         return func(**kwargs)
@@ -163,13 +168,60 @@ def test_acall_retries_retryable_empty_response(no_wait):
     assert len(calls) == 2
 
 
-def test_call_gives_up_after_max_response_retries(no_wait):
-    responses = [_empty_response()] * LLM_DEFAULT_MAX_RESPONSE_RETRIES
+def _connection_error():
+    return APIConnectionError(request=httpx.Request("POST", "https://example.com"))
+
+
+def test_call_gives_up_after_max_retries(no_wait):
+    responses = [_empty_response()] * (LLM_DEFAULT_MAX_RETRIES + 1)
     caller, calls = _caller_returning(responses)
 
     with pytest.raises(EmptyLLMResponse):
         caller.call(LLMMessage(Role="user", Message="hi"))
-    assert len(calls) == LLM_DEFAULT_MAX_RESPONSE_RETRIES
+    assert len(calls) == LLM_DEFAULT_MAX_RETRIES
+
+
+def test_call_retries_transport_error(no_wait):
+    caller, calls = _caller_returning([_connection_error(), _ok_response()])
+
+    out = caller.call(LLMMessage(Role="user", Message="hi"))
+
+    assert out.Message == "hello"
+    assert len(calls) == 2
+
+
+def test_transport_and_response_errors_share_one_budget(no_wait):
+    # alternate the two kinds of failure: a single loop stops at the shared
+    # budget instead of multiplying the transport and response budgets
+    responses = [
+        _connection_error() if i % 2 else _empty_response()
+        for i in range(2 * LLM_DEFAULT_MAX_RETRIES)
+    ]
+    caller, calls = _caller_returning(responses)
+
+    with pytest.raises((EmptyLLMResponse, APIConnectionError)):
+        caller.call(LLMMessage(Role="user", Message="hi"))
+    assert len(calls) == LLM_DEFAULT_MAX_RETRIES
+
+
+def test_acall_transport_and_response_errors_share_one_budget(no_wait):
+    responses = [
+        _connection_error() if i % 2 else _empty_response()
+        for i in range(2 * LLM_DEFAULT_MAX_RETRIES)
+    ]
+    caller, calls = _caller_returning(responses)
+
+    with pytest.raises((EmptyLLMResponse, APIConnectionError)):
+        asyncio.run(caller.acall(LLMMessage(Role="user", Message="hi")))
+    assert len(calls) == LLM_DEFAULT_MAX_RETRIES
+
+
+def test_call_does_not_retry_other_exceptions(no_wait):
+    caller, calls = _caller_returning([RuntimeError("boom"), _ok_response()])
+
+    with pytest.raises(RuntimeError):
+        caller.call(LLMMessage(Role="user", Message="hi"))
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize(

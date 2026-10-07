@@ -1,6 +1,5 @@
 import os
-import logging
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from types import GeneratorType
 import json
 import time
@@ -9,7 +8,6 @@ import anthropic
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
 from anthropic import RateLimitError as RateLimitErrorAnthropic
-from ..constants import LLM_DEFAULT_MAX_RETRIES
 from pydantic import BaseModel, ConfigDict
 
 from ..llmtypes import (
@@ -25,15 +23,6 @@ from ..llmtypes import (
 from ..tooluse import Tool
 from ..errors import empty_response_error, safe_usage
 from ..decorators import delayedretry
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_log,
-    after_log,
-    before_sleep_log,
-)
 
 
 def _thinking_tokens(usage) -> int:
@@ -342,69 +331,45 @@ class ClaudeCaller(LLMCaller):
 
 
 class ClaudeStreamingCaller(ClaudeCaller):
+    _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (
+        RateLimitErrorAnthropic,
+    )
+
     def __init__(self, model: str):
         super().__init__(model)
 
         self.Func = self.Client.beta.messages.stream
         self.AFunc = self.AClient.beta.messages.stream
 
-        # Override retry methods with streaming-specific implementations
-        self._create_streaming_retry_methods()
+    def _call(self, *args, **kwargs):
+        """Single streaming API call, returning (final message, latency)."""
+        start_time = time.perf_counter()
+        with self.Func(*args, **kwargs) as stream:
+            # the SDK's accumulator drops output_tokens_details from
+            # message_delta, so capture it from the raw events
+            details = None
+            for event in stream:
+                if event.type == "message_delta":
+                    details = getattr(event.usage, "output_tokens_details", None)
+            out = stream.get_final_message()
+        latency = time.perf_counter() - start_time
+        if details is not None and _thinking_tokens(out.usage) == 0:
+            out.usage.output_tokens_details = details
+        return out, latency
 
-    def _create_streaming_retry_methods(self):
-        """Create streaming-specific Tenacity-based retry methods."""
-
-        # Sync streaming version with Tenacity
-        @retry(
-            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((RateLimitErrorAnthropic,)),
-            before=before_log(self.logger, logging.DEBUG),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
-            after=after_log(self.logger, logging.DEBUG),
-            reraise=True,
-        )
-        def sync_streaming_retry(*args, **kwargs):
-            start_time = time.perf_counter()
-            with self.Func(*args, **kwargs) as stream:
-                # the SDK's accumulator drops output_tokens_details from
-                # message_delta, so capture it from the raw events
-                details = None
-                for event in stream:
-                    if event.type == "message_delta":
-                        details = getattr(event.usage, "output_tokens_details", None)
-                out = stream.get_final_message()
-            latency = time.perf_counter() - start_time
-            if details is not None and _thinking_tokens(out.usage) == 0:
-                out.usage.output_tokens_details = details
-            return out, latency
-
-        # Async streaming version with Tenacity
-        @retry(
-            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((RateLimitErrorAnthropic,)),
-            before=before_log(self.logger, logging.DEBUG),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
-            after=after_log(self.logger, logging.DEBUG),
-            reraise=True,
-        )
-        async def async_streaming_retry(*args, **kwargs):
-            start_time = time.perf_counter()
-            async with self.AFunc(*args, **kwargs) as stream:
-                details = None
-                async for event in stream:
-                    if event.type == "message_delta":
-                        details = getattr(event.usage, "output_tokens_details", None)
-                out = await stream.get_final_message()
-            latency = time.perf_counter() - start_time
-            if details is not None and _thinking_tokens(out.usage) == 0:
-                out.usage.output_tokens_details = details
-            return out, latency
-
-        # Override the base class retry methods with streaming versions
-        self._sync_call_with_retry = sync_streaming_retry
-        self._async_call_with_retry = async_streaming_retry
+    async def _acall(self, *args, **kwargs):
+        """Single async streaming API call, returning (final message, latency)."""
+        start_time = time.perf_counter()
+        async with self.AFunc(*args, **kwargs) as stream:
+            details = None
+            async for event in stream:
+                if event.type == "message_delta":
+                    details = getattr(event.usage, "output_tokens_details", None)
+            out = await stream.get_final_message()
+        latency = time.perf_counter() - start_time
+        if details is not None and _thinking_tokens(out.usage) == 0:
+            out.usage.output_tokens_details = details
+        return out, latency
 
 
 # def tokenizer(messagelist):

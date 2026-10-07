@@ -37,7 +37,6 @@ from .logging_utils import get_logger, log_call_start, log_call_completion
 
 # Tenacity imports for superior retry functionality
 from tenacity import (
-    retry,
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
@@ -53,7 +52,6 @@ from .errors import is_retryable_response_error
 from .constants import (
     LLM_DEFAULT_MAX_TOKENS,
     LLM_DEFAULT_MAX_RETRIES,
-    LLM_DEFAULT_MAX_RESPONSE_RETRIES,
 )
 from .sysutils import load_models, deepmerge_dicts, get_google_token
 
@@ -339,82 +337,38 @@ class LLMCaller(ABC, BaseModel):
     Token_Limit_Completion: Optional[int] = None
     Defaults: Dict = Field(default_factory=dict)
     Arg_Names: Optional[LLMCallArgNames] = None
-    
-    # Thread-safe decorated methods created once during initialization
-    _sync_call_with_retry: Optional[Callable] = None
-    _async_call_with_retry: Optional[Callable] = None
-    
-    def model_post_init(self, __context: Any) -> None:
-        """Initialize decorated retry methods after model creation."""
-        super().model_post_init(__context) if hasattr(super(), 'model_post_init') else None
-        self._create_retry_methods()
-    
+
+    # transport errors worth re-sending the request for
+    _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (
+        RateLimitErrorOpenAI,
+        RateLimitErrorAnthropic,
+        APIConnectionError,
+        ServerError,
+    )
+
     @property
     def logger(self) -> logging.Logger:
         """Get logger instance for this caller."""
         return get_logger(f"caller.{self.Model.Name or 'unknown'}")
-    
-    def _create_retry_methods(self):
-        """Create Tenacity-based retry methods with superior logging."""
-        
-        # Sync version with Tenacity
-        @retry(
-            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((
-                RateLimitErrorOpenAI,
-                RateLimitErrorAnthropic,
-                APIConnectionError,
-                ServerError,
-            )),
-            before=before_log(self.logger, logging.DEBUG),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
-            after=after_log(self.logger, logging.DEBUG),
-            reraise=True
-        )
-        def sync_retry_wrapper(*args, **kwargs):
-            start_time = time.perf_counter()
-            out = self.Func(*args, **kwargs)
-            latency = time.perf_counter() - start_time
-            return out, latency
-        
-        # Async version with Tenacity  
-        @retry(
-            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((
-                RateLimitErrorOpenAI,
-                RateLimitErrorAnthropic,
-                APIConnectionError,
-                ServerError,
-            )),
-            before=before_log(self.logger, logging.DEBUG),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
-            after=after_log(self.logger, logging.DEBUG),
-            reraise=True
-        )
-        async def async_retry_wrapper(*args, **kwargs):
-            start_time = time.perf_counter()
-            out = await self.AFunc(*args, **kwargs)
-            latency = time.perf_counter() - start_time
-            return out, latency
-        
-        self._sync_call_with_retry = sync_retry_wrapper
-        self._async_call_with_retry = async_retry_wrapper
 
-    def _response_retry_kwargs(self):
-        """Tenacity settings for re-sending a request whose response was unusable.
+    def _retry_kwargs(self):
+        """Tenacity settings for re-sending a request, shared by call and acall.
 
-        Only LLMResponseErrors flagged as retryable (e.g. a transient empty
-        response) are retried; content filtering, token exhaustion and invalid
-        response shapes are raised immediately. Transport errors are retried
-        separately inside each attempt by _sync/_async_call_with_retry.
+        Transport errors and LLMResponseErrors flagged as retryable (e.g. a
+        transient empty response) draw on the same attempt budget. Content
+        filtering, token exhaustion and invalid response shapes are raised
+        immediately.
         """
         return dict(
-            stop=stop_after_attempt(LLM_DEFAULT_MAX_RESPONSE_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=10),
-            retry=retry_if_exception(is_retryable_response_error),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING),
+            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=(
+                retry_if_exception_type(self._transport_errors)
+                | retry_if_exception(is_retryable_response_error)
+            ),
+            before=before_log(self.logger, logging.DEBUG),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
+            after=after_log(self.logger, logging.DEBUG),
             reraise=True,
         )
 
@@ -467,7 +421,7 @@ class LLMCaller(ABC, BaseModel):
         
         try:
             kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-            for attempt in Retrying(**self._response_retry_kwargs()):
+            for attempt in Retrying(**self._retry_kwargs()):
                 with attempt:
                     response, latency = self._call(**kwargs)
                     formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
@@ -495,7 +449,7 @@ class LLMCaller(ABC, BaseModel):
         
         try:
             kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
-            async for attempt in AsyncRetrying(**self._response_retry_kwargs()):
+            async for attempt in AsyncRetrying(**self._retry_kwargs()):
                 with attempt:
                     response, latency = await self._acall(**kwargs)
                     formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
@@ -527,12 +481,22 @@ class LLMCaller(ABC, BaseModel):
         return {**self.Model.Call_Args, **self.Defaults, **kwargs}
 
     def _call(self, *args, **kwargs):
-        """Thread-safe synchronous call with retry logic."""
-        return self._sync_call_with_retry(*args, **kwargs)
+        """Single synchronous API call, returning (response, latency).
+
+        Retries are handled by the caller loop in call().
+        """
+        start_time = time.perf_counter()
+        out = self.Func(*args, **kwargs)
+        return out, time.perf_counter() - start_time
 
     async def _acall(self, *args, **kwargs):
-        """Thread-safe asynchronous call with retry logic."""
-        return await self._async_call_with_retry(*args, **kwargs)
+        """Single asynchronous API call, returning (response, latency).
+
+        Retries are handled by the caller loop in acall().
+        """
+        start_time = time.perf_counter()
+        out = await self.AFunc(*args, **kwargs)
+        return out, time.perf_counter() - start_time
 
 
 class LiteralCaller(LLMCaller):

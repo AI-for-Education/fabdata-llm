@@ -114,9 +114,9 @@ class TestInitialization:
         """Test ClaudeStreamingCaller initialization."""
         caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
         assert caller.Model.Name == DEFAULT_CLAUDE_MODEL
-        # Streaming caller should have different retry methods
-        assert caller._sync_call_with_retry is not None
-        assert caller._async_call_with_retry is not None
+        # Streaming caller only retries rate limits at the transport level
+        from anthropic import RateLimitError
+        assert caller._transport_errors == (RateLimitError,)
 
 
 # ============================================================================
@@ -739,9 +739,8 @@ class TestStreamingThinkingTokens:
         final = make_output([make_text_block("Answer")], output_tokens=30)
         caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
         caller.Func = lambda *a, **k: FakeStream(make_stream_events(), final)
-        caller._create_streaming_retry_methods()
 
-        out, _ = caller._sync_call_with_retry()
+        out, _ = caller._call()
 
         assert caller.format_output(out).TokensUsedReasoning == 20
 
@@ -749,9 +748,8 @@ class TestStreamingThinkingTokens:
         final = make_output([make_text_block("Answer")], output_tokens=30)
         caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
         caller.AFunc = lambda *a, **k: FakeAsyncStream(make_stream_events(), final)
-        caller._create_streaming_retry_methods()
 
-        out, _ = asyncio.run(caller._async_call_with_retry())
+        out, _ = asyncio.run(caller._acall())
 
         assert caller.format_output(out).TokensUsedReasoning == 20
 
