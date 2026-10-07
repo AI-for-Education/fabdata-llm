@@ -10,6 +10,7 @@ from PIL import Image
 
 from fdllm import OpenAICaller
 from fdllm.openai.caller import OpenAICompletionsCaller
+from fdllm.errors import EmptyLLMResponse, LLMContentFiltered
 from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.tooluse import Tool, ToolParam
@@ -387,6 +388,112 @@ def test_format_output_invalid():
         caller.format_output(output)
 
 
+@pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])
+def test_format_output_no_choices(choices):
+    """Test format_output with an empty or missing choices list"""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+
+    output = SimpleNamespace(
+        choices=choices,
+        id="chatcmpl-1",
+        usage=SimpleNamespace(total_tokens=10, completion_tokens=0),
+    )
+
+    with pytest.raises(EmptyLLMResponse, match="no choices") as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert err.retryable is True
+    assert err.metadata == {
+        "provider": "openai",
+        "model": DEFAULT_OPENAI_MODEL,
+        "response_id": "chatcmpl-1",
+        "usage": {"completion_tokens": 0, "total_tokens": 10},
+        "retryable": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "message, finish_reason, error_cls, retryable",
+    [
+        (
+            SimpleNamespace(content=None, tool_calls=None, refusal="I can't help"),
+            "stop",
+            LLMContentFiltered,
+            False,
+        ),
+        (
+            SimpleNamespace(content=None, tool_calls=None),
+            "content_filter",
+            LLMContentFiltered,
+            False,
+        ),
+        (
+            SimpleNamespace(content=None, tool_calls=None),
+            "length",
+            EmptyLLMResponse,
+            False,
+        ),
+    ],
+    ids=["refusal", "content_filter", "length"],
+)
+def test_format_output_empty_message_classification(
+    message, finish_reason, error_cls, retryable
+):
+    """Test empty messages are classified by refusal / finish_reason"""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+
+    output = SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=message, logprobs=None, finish_reason=finish_reason)
+        ],
+        usage=None,
+    )
+
+    with pytest.raises(error_cls) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is error_cls
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
+    # the refusal text is model output and must not leak into logs
+    assert "I can't help" not in str(err)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        SimpleNamespace(content="", tool_calls=None),
+        SimpleNamespace(content=" \n", tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=[]),
+    ],
+    ids=["empty_str", "whitespace", "none", "empty_tool_calls"],
+)
+@pytest.mark.parametrize(
+    "finish_reason, retryable", [("stop", True), ("length", False)]
+)
+def test_format_output_empty_message(message, finish_reason, retryable):
+    """Test blank content / empty tool_calls raise instead of returning a message"""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+
+    output = SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=message, logprobs=None, finish_reason=finish_reason)
+        ],
+        usage=None,
+    )
+
+    with pytest.raises(EmptyLLMResponse) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
+
+
 def test_format_output_generator():
     """Test format_output with generator type"""
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
@@ -608,15 +715,37 @@ def test_completions_format_output():
     assert result.Latency == 1.0
 
 
-def test_completions_format_output_invalid():
-    """Test completions format_output with invalid response"""
+@pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])
+def test_completions_format_output_no_choices(choices):
+    """Test completions format_output with an empty or missing choices list"""
     caller = OpenAICompletionsCaller(model="text-davinci-003")
 
-    # Missing choices
-    output = SimpleNamespace(choices=[])
+    output = SimpleNamespace(choices=choices)
 
-    with pytest.raises(ValueError, match="Invalid completions API response"):
+    with pytest.raises(EmptyLLMResponse, match="no choices") as exc_info:
         caller.format_output(output)
+    assert exc_info.value.retryable is True
+
+
+@pytest.mark.parametrize("text", ["", " \n", None], ids=["empty_str", "whitespace", "none"])
+@pytest.mark.parametrize(
+    "finish_reason, retryable", [("stop", True), ("length", False)]
+)
+def test_completions_format_output_empty_text(text, finish_reason, retryable):
+    """Test completions format_output raises on blank text"""
+    caller = OpenAICompletionsCaller(model="text-davinci-003")
+
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(text=text, finish_reason=finish_reason)]
+    )
+
+    with pytest.raises(EmptyLLMResponse) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
 
 
 def test_completions_format_output_no_text():

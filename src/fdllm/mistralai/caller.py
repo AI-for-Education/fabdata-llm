@@ -20,6 +20,12 @@ from ..llmtypes import (
 # now always uses gpt tokenizer
 MISTRALTOKENIZER = False
 from ..openai.tokenizer import tokenize_chatgpt_messages
+from ..errors import (
+    EmptyLLMResponse,
+    empty_response_error,
+    ensure_nonempty,
+    safe_usage,
+)
 
 tokenizer = tokenize_chatgpt_messages
 
@@ -64,12 +70,27 @@ class MistralCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
+            error_meta = dict(
+                provider="mistral",
+                model=self.Model.Name,
+                response_id=getattr(output, "id", None),
+                usage=safe_usage(
+                    getattr(output, "usage", None),
+                    "prompt_tokens",
+                    "completion_tokens",
+                    "total_tokens",
+                ),
+            )
+            if not getattr(output, "choices", None):
+                raise EmptyLLMResponse("Empty response: no choices", **error_meta)
+            error_meta["stop_reason"] = getattr(output.choices[0], "finish_reason", None)
             msg = output.choices[0].message
             if msg.content:
-                return LLMMessage(
+                out = LLMMessage(
                     Role="assistant", Message=msg.content.lstrip(), Latency=latency
                 )
-            elif msg.tool_calls is not None:
+                return ensure_nonempty(out, **error_meta)
+            elif msg.tool_calls:
                 tcs = [
                     LLMToolCall(
                         ID=tc.id,
@@ -78,9 +99,12 @@ class MistralCaller(LLMCaller):
                     )
                     for tc in msg.tool_calls
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
+                out = LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
+                return ensure_nonempty(out, **error_meta)
             else:
-                raise ValueError("Output must be either content or tool call")
+                raise empty_response_error(
+                    "Output must be either content or tool call", **error_meta
+                )
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return _tokenizer(self.format_messagelist(messagelist))

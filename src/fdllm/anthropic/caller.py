@@ -1,6 +1,5 @@
 import os
-import logging
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from types import GeneratorType
 import json
 import time
@@ -9,7 +8,6 @@ import anthropic
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
 from anthropic import RateLimitError as RateLimitErrorAnthropic
-from ..constants import LLM_DEFAULT_MAX_RETRIES
 from pydantic import BaseModel, ConfigDict
 
 from ..llmtypes import (
@@ -23,16 +21,8 @@ from ..llmtypes import (
     LLMDocument,
 )
 from ..tooluse import Tool
+from ..errors import empty_response_error, ensure_nonempty, safe_usage
 from ..decorators import delayedretry
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_log,
-    after_log,
-    before_sleep_log,
-)
 
 
 def _thinking_tokens(usage) -> int:
@@ -184,84 +174,100 @@ class ClaudeCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
-            if getattr(output, "content", None) is not None:
-                content = output.content
-                if isinstance(content[0], BetaThinkingBlock):
-                    content.pop(0)
-                #### token counts
-                usage = getattr(output, "usage", None)
-                if usage is not None:
-                    total_tokens = usage.input_tokens + usage.output_tokens
-                    completion_tokens = usage.output_tokens
-                    reasoning_tokens = _thinking_tokens(usage)
-                else:
-                    total_tokens = None
-                    completion_tokens = None
-                    reasoning_tokens = None
-                token_count_kwargs = dict(
-                    TokensUsed=total_tokens,
-                    TokensUsedCompletion=completion_tokens,
-                    TokensUsedReasoning=reasoning_tokens,
-                )
-                if isinstance(content[0], BetaToolUseBlock):
-                    if response_schema is not None:
-                        ### if the user has set a response_schema then the tool use block is
-                        ### to be processed as an output format, not as a tool call
-                        structured_json = output.content[0].input
-                        formatted_content = json.dumps(structured_json)
-                        out = LLMMessage(
-                            Role="assistant",
-                            Message=formatted_content,
-                            Latency=latency,
-                            **token_count_kwargs,
-                        )
-                    else:
-                        # otherwise it should be processed as a tool call
-                        out = LLMMessage(
-                            Role="assistant",
-                            Message="",
-                            Latency=latency,
-                            **token_count_kwargs,
-                        )
-                        # Process ALL content items as tool calls
-                        # Anthropic documents tool-first responses such as
-                        # thinking -> tool_use and multiple tool_use blocks.
-                        # If they later expand this branch to allow trailing
-                        # non-tool blocks after a tool-first start, revisit
-                        # this loop and add coverage for that ordering.
-                        out.ToolCalls = []
-                        for tcout in content:
-                            tc = LLMToolCall(
-                                ID=tcout.id,
-                                Name=tcout.name,
-                                Args=tcout.input,
-                            )
-                            out.ToolCalls.append(tc)
-                        return out
-                else:
-                    text = "".join(
-                        b.text for b in content if isinstance(b, BetaTextBlock)
-                    ).strip()
+            content = getattr(output, "content", None)
+            error_meta = dict(
+                provider="anthropic",
+                model=self.Model.Name,
+                response_id=getattr(output, "id", None),
+                stop_reason=getattr(output, "stop_reason", None),
+                block_types=[getattr(b, "type", type(b).__name__) for b in content or []],
+                usage=safe_usage(
+                    getattr(output, "usage", None), "input_tokens", "output_tokens"
+                ),
+            )
+            if not content:
+                raise empty_response_error("Empty response: no content blocks", **error_meta)
+            if isinstance(content[0], BetaThinkingBlock):
+                content.pop(0)
+                if not content:
+                    raise empty_response_error(
+                        "Empty response: only a thinking block was returned",
+                        **error_meta,
+                    )
+            #### token counts
+            usage = getattr(output, "usage", None)
+            if usage is not None:
+                total_tokens = usage.input_tokens + usage.output_tokens
+                completion_tokens = usage.output_tokens
+                reasoning_tokens = _thinking_tokens(usage)
+            else:
+                total_tokens = None
+                completion_tokens = None
+                reasoning_tokens = None
+            token_count_kwargs = dict(
+                TokensUsed=total_tokens,
+                TokensUsedCompletion=completion_tokens,
+                TokensUsedReasoning=reasoning_tokens,
+            )
+            if isinstance(content[0], BetaToolUseBlock):
+                if response_schema is not None:
+                    ### if the user has set a response_schema then the tool use block is
+                    ### to be processed as an output format, not as a tool call
+                    structured_json = output.content[0].input
+                    formatted_content = json.dumps(structured_json)
                     out = LLMMessage(
                         Role="assistant",
-                        Message=text,
+                        Message=formatted_content,
                         Latency=latency,
                         **token_count_kwargs,
                     )
-                if len(content) > 1:
-                    tool_blocks = [
-                        b for b in content[1:] if isinstance(b, BetaToolUseBlock)
-                    ]
-                    if tool_blocks:
-                        out.ToolCalls = []
-                        for tcout in tool_blocks:
-                            tc = LLMToolCall(
-                                ID=tcout.id,
-                                Name=tcout.name,
-                                Args=tcout.input,
-                            )
-                            out.ToolCalls.append(tc)
-            return out
+                else:
+                    # otherwise it should be processed as a tool call
+                    out = LLMMessage(
+                        Role="assistant",
+                        Message="",
+                        Latency=latency,
+                        **token_count_kwargs,
+                    )
+                    # Process ALL content items as tool calls
+                    # Anthropic documents tool-first responses such as
+                    # thinking -> tool_use and multiple tool_use blocks.
+                    # If they later expand this branch to allow trailing
+                    # non-tool blocks after a tool-first start, revisit
+                    # this loop and add coverage for that ordering.
+                    out.ToolCalls = []
+                    for tcout in content:
+                        tc = LLMToolCall(
+                            ID=tcout.id,
+                            Name=tcout.name,
+                            Args=tcout.input,
+                        )
+                        out.ToolCalls.append(tc)
+                    return ensure_nonempty(out, **error_meta)
+            else:
+                text = "".join(
+                    b.text for b in content if isinstance(b, BetaTextBlock)
+                ).strip()
+                out = LLMMessage(
+                    Role="assistant",
+                    Message=text,
+                    Latency=latency,
+                    **token_count_kwargs,
+                )
+            if len(content) > 1:
+                tool_blocks = [
+                    b for b in content[1:] if isinstance(b, BetaToolUseBlock)
+                ]
+                if tool_blocks:
+                    out.ToolCalls = []
+                    for tcout in tool_blocks:
+                        tc = LLMToolCall(
+                            ID=tcout.id,
+                            Name=tcout.name,
+                            Args=tcout.input,
+                        )
+                        out.ToolCalls.append(tc)
+            return ensure_nonempty(out, **error_meta)
 
     def format_tool(self, tool: Tool):
         return {
@@ -325,69 +331,45 @@ class ClaudeCaller(LLMCaller):
 
 
 class ClaudeStreamingCaller(ClaudeCaller):
+    _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (
+        RateLimitErrorAnthropic,
+    )
+
     def __init__(self, model: str):
         super().__init__(model)
 
         self.Func = self.Client.beta.messages.stream
         self.AFunc = self.AClient.beta.messages.stream
 
-        # Override retry methods with streaming-specific implementations
-        self._create_streaming_retry_methods()
+    def _call(self, *args, **kwargs):
+        """Single streaming API call, returning (final message, latency)."""
+        start_time = time.perf_counter()
+        with self.Func(*args, **kwargs) as stream:
+            # the SDK's accumulator drops output_tokens_details from
+            # message_delta, so capture it from the raw events
+            details = None
+            for event in stream:
+                if event.type == "message_delta":
+                    details = getattr(event.usage, "output_tokens_details", None)
+            out = stream.get_final_message()
+        latency = time.perf_counter() - start_time
+        if details is not None and _thinking_tokens(out.usage) == 0:
+            out.usage.output_tokens_details = details
+        return out, latency
 
-    def _create_streaming_retry_methods(self):
-        """Create streaming-specific Tenacity-based retry methods."""
-
-        # Sync streaming version with Tenacity
-        @retry(
-            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((RateLimitErrorAnthropic,)),
-            before=before_log(self.logger, logging.DEBUG),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
-            after=after_log(self.logger, logging.DEBUG),
-            reraise=True,
-        )
-        def sync_streaming_retry(*args, **kwargs):
-            start_time = time.perf_counter()
-            with self.Func(*args, **kwargs) as stream:
-                # the SDK's accumulator drops output_tokens_details from
-                # message_delta, so capture it from the raw events
-                details = None
-                for event in stream:
-                    if event.type == "message_delta":
-                        details = getattr(event.usage, "output_tokens_details", None)
-                out = stream.get_final_message()
-            latency = time.perf_counter() - start_time
-            if details is not None and _thinking_tokens(out.usage) == 0:
-                out.usage.output_tokens_details = details
-            return out, latency
-
-        # Async streaming version with Tenacity
-        @retry(
-            stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((RateLimitErrorAnthropic,)),
-            before=before_log(self.logger, logging.DEBUG),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
-            after=after_log(self.logger, logging.DEBUG),
-            reraise=True,
-        )
-        async def async_streaming_retry(*args, **kwargs):
-            start_time = time.perf_counter()
-            async with self.AFunc(*args, **kwargs) as stream:
-                details = None
-                async for event in stream:
-                    if event.type == "message_delta":
-                        details = getattr(event.usage, "output_tokens_details", None)
-                out = await stream.get_final_message()
-            latency = time.perf_counter() - start_time
-            if details is not None and _thinking_tokens(out.usage) == 0:
-                out.usage.output_tokens_details = details
-            return out, latency
-
-        # Override the base class retry methods with streaming versions
-        self._sync_call_with_retry = sync_streaming_retry
-        self._async_call_with_retry = async_streaming_retry
+    async def _acall(self, *args, **kwargs):
+        """Single async streaming API call, returning (final message, latency)."""
+        start_time = time.perf_counter()
+        async with self.AFunc(*args, **kwargs) as stream:
+            details = None
+            async for event in stream:
+                if event.type == "message_delta":
+                    details = getattr(event.usage, "output_tokens_details", None)
+            out = await stream.get_final_message()
+        latency = time.perf_counter() - start_time
+        if details is not None and _thinking_tokens(out.usage) == 0:
+            out.usage.output_tokens_details = details
+        return out, latency
 
 
 # def tokenizer(messagelist):
