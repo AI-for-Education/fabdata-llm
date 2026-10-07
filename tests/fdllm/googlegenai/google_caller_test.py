@@ -568,6 +568,33 @@ def test_format_output_no_parts(content, finish_reason, error_cls, retryable):
     assert err.block_types == []
 
 
+@pytest.mark.parametrize("text", ["", " \n"], ids=["empty_str", "whitespace"])
+@pytest.mark.parametrize(
+    "finish_reason, retryable",
+    [(FinishReason.STOP, True), (FinishReason.MAX_TOKENS, False)],
+)
+def test_format_output_empty_text(text, finish_reason, retryable):
+    """Test a blank text part raises instead of returning an empty message"""
+    caller = GoogleGenAICaller(model="gemini-2.0-flash")
+
+    part = SimpleNamespace(text=text, function_call=None)
+    candidate = SimpleNamespace(
+        content=SimpleNamespace(parts=[part]),
+        logprobs_result=None,
+        finish_reason=finish_reason,
+    )
+    output = SimpleNamespace(candidates=[candidate], usage_metadata=None)
+
+    with pytest.raises(EmptyLLMResponse, match="no text or tool calls") as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason.value
+    assert err.block_types == ["text"]
+
+
 def test_format_output_unknown_part_is_invalid():
     """Test a part with neither text nor function_call raises InvalidProviderResponse"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")

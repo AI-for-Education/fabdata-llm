@@ -20,7 +20,12 @@ from ..llmtypes import (
 # now always uses gpt tokenizer
 MISTRALTOKENIZER = False
 from ..openai.tokenizer import tokenize_chatgpt_messages
-from ..errors import EmptyLLMResponse, empty_response_error, safe_usage
+from ..errors import (
+    EmptyLLMResponse,
+    empty_response_error,
+    ensure_nonempty,
+    safe_usage,
+)
 
 tokenizer = tokenize_chatgpt_messages
 
@@ -81,10 +86,11 @@ class MistralCaller(LLMCaller):
             error_meta["stop_reason"] = getattr(output.choices[0], "finish_reason", None)
             msg = output.choices[0].message
             if msg.content:
-                return LLMMessage(
+                out = LLMMessage(
                     Role="assistant", Message=msg.content.lstrip(), Latency=latency
                 )
-            elif msg.tool_calls is not None:
+                return ensure_nonempty(out, **error_meta)
+            elif msg.tool_calls:
                 tcs = [
                     LLMToolCall(
                         ID=tc.id,
@@ -93,7 +99,8 @@ class MistralCaller(LLMCaller):
                     )
                     for tc in msg.tool_calls
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
+                out = LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
+                return ensure_nonempty(out, **error_meta)
             else:
                 raise empty_response_error(
                     "Output must be either content or tool call", **error_meta

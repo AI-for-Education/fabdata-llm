@@ -16,6 +16,7 @@ from ..errors import (
     InvalidProviderResponse,
     LLMContentFiltered,
     empty_response_error,
+    ensure_nonempty,
     safe_usage,
 )
 
@@ -290,14 +291,16 @@ class GoogleGenAICaller(LLMCaller):
                 )
             else:
                 logprobs = None
-            if getattr(parts[0], "text", None) is not None:
-                return LLMMessage(
+            text = getattr(parts[0], "text", None)
+            if text:
+                out = LLMMessage(
                     Role="assistant",
-                    Message=parts[0].text,
+                    Message=text,
                     LogProbs=logprobs,
                     Latency=latency,
                     **token_count_kwargs,
                 )
+                return ensure_nonempty(out, **error_meta)
             elif getattr(parts[0], "function_call", None) is not None:
                 tcs = [
                     LLMToolCall(
@@ -308,12 +311,17 @@ class GoogleGenAICaller(LLMCaller):
                     for p in parts
                     if getattr(p, "function_call", None) is not None
                 ]
-                return LLMMessage(
+                out = LLMMessage(
                     Role="assistant",
                     ToolCalls=tcs,
                     LogProbs=logprobs,
                     Latency=latency,
                     **token_count_kwargs,
+                )
+                return ensure_nonempty(out, **error_meta)
+            elif text is not None:
+                raise empty_response_error(
+                    "Empty response: no text or tool calls", **error_meta
                 )
             else:
                 raise InvalidProviderResponse(

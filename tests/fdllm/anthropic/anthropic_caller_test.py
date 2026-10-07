@@ -638,6 +638,23 @@ class TestFormatOutput:
         with pytest.raises(EmptyLLMResponse, match="no content blocks"):
             caller.format_output(output)
 
+    @pytest.mark.parametrize("text", ["", " \n"], ids=["empty_str", "whitespace"])
+    @pytest.mark.parametrize(
+        "stop_reason, retryable", [("end_turn", True), ("max_tokens", False)]
+    )
+    def test_blank_text_raises(self, caller, text, stop_reason, retryable):
+        """Test a response whose text blocks are blank raises EmptyLLMResponse."""
+        output = make_output([make_text_block(text)])
+        output.stop_reason = stop_reason
+        with pytest.raises(EmptyLLMResponse, match="no text or tool calls") as exc_info:
+            caller.format_output(output)
+
+        err = exc_info.value
+        assert type(err) is EmptyLLMResponse
+        assert err.retryable is retryable
+        assert err.stop_reason == stop_reason
+        assert err.block_types == ["text"]
+
     def test_thinking_only_content_raises(self, caller):
         """Test a thinking-only response that hit max_tokens is not retryable."""
         thinking = BetaThinkingBlock(type="thinking", thinking="Hmm...", signature="sig")

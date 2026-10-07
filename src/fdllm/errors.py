@@ -143,5 +143,18 @@ def empty_response_error(message: str, **kwargs) -> EmptyLLMResponse:
     return EmptyLLMResponse(message, **kwargs)
 
 
+def ensure_nonempty(msg, **error_meta):
+    """Return ``msg`` unchanged, or raise if it has neither text nor tool calls.
+
+    Whitespace-only text counts as empty. ``error_meta`` should include the stop
+    reason, so that a response cut off by the token limit is not retried.
+    """
+    if not (msg.Message or "").strip() and not msg.ToolCalls:
+        raise empty_response_error(
+            "Empty response: no text or tool calls", **error_meta
+        )
+    return msg
+
+
 def is_retryable_response_error(exc: BaseException) -> bool:
     return isinstance(exc, LLMResponseError) and exc.retryable

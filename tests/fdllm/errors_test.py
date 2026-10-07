@@ -19,10 +19,11 @@ from fdllm.errors import (
     LLMContentFiltered,
     LLMResponseError,
     empty_response_error,
+    ensure_nonempty,
     is_retryable_response_error,
     safe_usage,
 )
-from fdllm.llmtypes import LLMMessage
+from fdllm.llmtypes import LLMMessage, LLMToolCall
 
 TEST_MODEL = "gpt-4.1-mini"
 
@@ -95,6 +96,47 @@ def test_safe_usage_keeps_only_int_counts():
     assert safe_usage({"a": 1, "b": "x"}, "a", "b") == {"a": 1}
     assert safe_usage(None, "a") is None
     assert safe_usage(SimpleNamespace(), "a") is None
+
+
+@pytest.mark.parametrize(
+    "msg",
+    [
+        LLMMessage(Role="assistant", Message="hi"),
+        LLMMessage(Role="assistant", Message="", ToolCalls=[LLMToolCall(ID="1", Name="f")]),
+    ],
+    ids=["text", "tool_calls"],
+)
+def test_ensure_nonempty_returns_message(msg):
+    assert ensure_nonempty(msg, provider="openai") is msg
+
+
+@pytest.mark.parametrize(
+    "msg",
+    [
+        LLMMessage(Role="assistant", Message=""),
+        LLMMessage(Role="assistant", Message=" \n"),
+        LLMMessage(Role="assistant"),
+        LLMMessage(Role="assistant", ToolCalls=[]),
+    ],
+    ids=["empty_str", "whitespace", "none", "empty_tool_calls"],
+)
+@pytest.mark.parametrize(
+    "stop_reason, error_cls, retryable",
+    [
+        ("stop", EmptyLLMResponse, True),
+        ("length", EmptyLLMResponse, False),
+        ("content_filter", LLMContentFiltered, False),
+    ],
+)
+def test_ensure_nonempty_raises(msg, stop_reason, error_cls, retryable):
+    with pytest.raises(error_cls, match="no text or tool calls") as exc_info:
+        ensure_nonempty(msg, provider="openai", stop_reason=stop_reason)
+    assert type(exc_info.value) is error_cls
+    assert exc_info.value.retryable is retryable
+
+
+def test_llmmessage_empty_tool_calls_become_none():
+    assert LLMMessage(Role="assistant", ToolCalls=[]).ToolCalls is None
 
 
 # ===== Shared retry loop in call / acall =====

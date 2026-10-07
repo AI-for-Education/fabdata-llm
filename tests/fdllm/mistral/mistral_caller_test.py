@@ -200,6 +200,36 @@ def test_format_output_no_choices(choices):
     assert exc_info.value.retryable is True
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        SimpleNamespace(content="", tool_calls=None),
+        SimpleNamespace(content=" \n", tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=[]),
+    ],
+    ids=["empty_str", "whitespace", "none", "empty_tool_calls"],
+)
+@pytest.mark.parametrize(
+    "finish_reason, retryable", [("stop", True), ("length", False)]
+)
+def test_format_output_empty_message(message, finish_reason, retryable):
+    """Test blank content / empty tool_calls raise instead of returning a message."""
+    caller = MistralCaller(model=TEST_MODEL)
+
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)]
+    )
+
+    with pytest.raises(EmptyLLMResponse) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
+
+
 def test_format_output_generator():
     """Test format_output with generator type."""
     caller = MistralCaller(model=TEST_MODEL)

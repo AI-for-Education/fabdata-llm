@@ -29,7 +29,7 @@ from openai import RateLimitError as RateLimitErrorOpenAI, APIConnectionError
 from anthropic import RateLimitError as RateLimitErrorAnthropic
 from google.genai.errors import ServerError
 from pydantic.dataclasses import dataclass
-from pydantic import ConfigDict, BaseModel, Field
+from pydantic import ConfigDict, BaseModel, Field, field_validator
 from PIL import Image, ImageFile
 
 from .decorators import delayedretry
@@ -190,6 +190,12 @@ class LLMMessage(BaseModel):
     LogProbs: Optional[Any] = None
     Latency: Optional[float] = None
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+
+    @field_validator("ToolCalls")
+    @classmethod
+    def _empty_tool_calls_to_none(cls, v):
+        # chat.py reads ToolCalls[0] whenever ToolCalls is not None
+        return v or None
 
     def __eq__(self, __value: object) -> bool:
         # exclude timestamp from equality test

@@ -21,7 +21,7 @@ from ..llmtypes import (
     LLMDocument,
 )
 from ..tooluse import Tool
-from ..errors import empty_response_error, safe_usage
+from ..errors import empty_response_error, ensure_nonempty, safe_usage
 from ..decorators import delayedretry
 
 
@@ -243,7 +243,7 @@ class ClaudeCaller(LLMCaller):
                             Args=tcout.input,
                         )
                         out.ToolCalls.append(tc)
-                    return out
+                    return ensure_nonempty(out, **error_meta)
             else:
                 text = "".join(
                     b.text for b in content if isinstance(b, BetaTextBlock)
@@ -267,7 +267,7 @@ class ClaudeCaller(LLMCaller):
                             Args=tcout.input,
                         )
                         out.ToolCalls.append(tc)
-            return out
+            return ensure_nonempty(out, **error_meta)
 
     def format_tool(self, tool: Tool):
         return {

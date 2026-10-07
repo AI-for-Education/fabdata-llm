@@ -36,6 +36,7 @@ from ..errors import (
     InvalidProviderResponse,
     LLMContentFiltered,
     empty_response_error,
+    ensure_nonempty,
     safe_usage,
 )
 
@@ -245,15 +246,16 @@ def _gpt_common_fmt_output(output, latency, model=None):
         error_meta["stop_reason"] = getattr(output.choices[0], "finish_reason", None)
         msg = output.choices[0].message
         logprobs = getattr(output.choices[0], "logprobs", None)
-        if msg.content is not None:
-            return LLMMessage(
+        if msg.content:
+            out = LLMMessage(
                 Role="assistant",
                 Message=msg.content,
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
             )
-        elif msg.tool_calls is not None:
+            return ensure_nonempty(out, **error_meta)
+        elif msg.tool_calls:
             tcs = [
                 LLMToolCall(
                     ID=tc.id,
@@ -262,13 +264,14 @@ def _gpt_common_fmt_output(output, latency, model=None):
                 )
                 for tc in msg.tool_calls
             ]
-            return LLMMessage(
+            out = LLMMessage(
                 Role="assistant",
                 ToolCalls=tcs,
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
             )
+            return ensure_nonempty(out, **error_meta)
         elif getattr(msg, "refusal", None):
             # the refusal text is model output, so it is not attached to the error
             raise LLMContentFiltered("The model refused to respond", **error_meta)
@@ -387,20 +390,17 @@ class OpenAICompletionsCaller(OpenAICaller):
                     "total_tokens",
                 ),
             )
-            if hasattr(output, "choices") and len(output.choices) > 0:
-                choice = output.choices[0]
-                if hasattr(choice, "text"):
-                    return LLMMessage(
-                        Role="assistant", Message=choice.text, Latency=latency
-                    )
-                else:
-                    raise InvalidProviderResponse(
-                        "Unexpected completions API response format",
-                        stop_reason=getattr(choice, "finish_reason", None),
-                        **error_meta,
-                    )
-            else:
-                raise EmptyLLMResponse("Invalid completions API response", **error_meta)
+            choices = getattr(output, "choices", None)
+            if not choices:
+                raise EmptyLLMResponse("Empty response: no choices", **error_meta)
+            choice = choices[0]
+            error_meta["stop_reason"] = getattr(choice, "finish_reason", None)
+            if not hasattr(choice, "text"):
+                raise InvalidProviderResponse(
+                    "Unexpected completions API response format", **error_meta
+                )
+            out = LLMMessage(Role="assistant", Message=choice.text, Latency=latency)
+            return ensure_nonempty(out, **error_meta)
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         """Process call arguments for the completions API."""

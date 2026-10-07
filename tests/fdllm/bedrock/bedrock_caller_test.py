@@ -411,6 +411,50 @@ def test_format_output_empty_content(
     }
 
 
+@pytest.mark.parametrize(
+    "content, stop_reason, retryable",
+    [
+        ([{"text": ""}], "end_turn", True),
+        ([{"text": " \n"}], "end_turn", True),
+        ([{"text": ""}], "max_tokens", False),
+        ([{"text": " \n"}], "max_tokens", False),
+        # tool_use stop reason but no toolUse blocks: must not yield ToolCalls=[]
+        ([{"text": ""}], "tool_use", True),
+    ],
+    ids=[
+        "empty_str-end_turn",
+        "whitespace-end_turn",
+        "empty_str-max_tokens",
+        "whitespace-max_tokens",
+        "tool_use_without_blocks",
+    ],
+)
+@patch('fdllm.bedrock.caller.boto3')
+@patch('fdllm.bedrock.caller.aioboto3')
+def test_format_output_blank_content(
+    mock_aioboto3, mock_boto3, content, stop_reason, retryable
+):
+    """Test format_output raises when content blocks hold no text or tool calls."""
+    mock_boto3.client.return_value = MagicMock()
+    mock_aioboto3.session.Session.return_value.client.return_value = MagicMock()
+
+    caller = BedrockCaller(model=TEST_MODEL)
+
+    output = {
+        "output": {"message": {"content": content}},
+        "stopReason": stop_reason,
+    }
+
+    with pytest.raises(EmptyLLMResponse, match="no text or tool calls") as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == stop_reason
+    assert err.block_types == ["text"]
+
+
 @patch('fdllm.bedrock.caller.boto3')
 @patch('fdllm.bedrock.caller.aioboto3')
 def test_format_output_text_with_leading_whitespace(mock_aioboto3, mock_boto3):
