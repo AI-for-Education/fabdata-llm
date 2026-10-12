@@ -174,6 +174,8 @@ class ClaudeCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
+            # get the model used for response
+            response_model = getattr(output, "model", None)
             content = getattr(output, "content", None)
             error_meta = dict(
                 provider="anthropic",
@@ -219,6 +221,7 @@ class ClaudeCaller(LLMCaller):
                         Role="assistant",
                         Message=formatted_content,
                         Latency=latency,
+                        ResponseModel=response_model,
                         **token_count_kwargs,
                     )
                 else:
@@ -227,6 +230,7 @@ class ClaudeCaller(LLMCaller):
                         Role="assistant",
                         Message="",
                         Latency=latency,
+                        ResponseModel=response_model,
                         **token_count_kwargs,
                     )
                     # Process ALL content items as tool calls
@@ -252,6 +256,7 @@ class ClaudeCaller(LLMCaller):
                     Role="assistant",
                     Message=text,
                     Latency=latency,
+                    ResponseModel=response_model,
                     **token_count_kwargs,
                 )
             if len(content) > 1:

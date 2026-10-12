@@ -219,6 +219,8 @@ def _gpt_common_fmt_output(output, latency, model=None):
     if isinstance(output, GeneratorType):
         return output
     else:
+        # get the model used for response
+        response_model = getattr(output, "model", None)
         usage = getattr(output, "usage",  None)
         if usage is None:
             token_count_kwargs = {}
@@ -253,6 +255,7 @@ def _gpt_common_fmt_output(output, latency, model=None):
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
+                ResponseModel=response_model,
             )
             return ensure_nonempty(out, **error_meta)
         elif msg.tool_calls:
@@ -270,6 +273,7 @@ def _gpt_common_fmt_output(output, latency, model=None):
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
+                ResponseModel=response_model,
             )
             return ensure_nonempty(out, **error_meta)
         elif getattr(msg, "refusal", None):
