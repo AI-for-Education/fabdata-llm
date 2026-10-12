@@ -200,6 +200,8 @@ class GoogleGenAICaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
+            # get the model used for response
+            response_model = getattr(output, "model_version", None)
             ## token counts
             usage_metadata = getattr(output, "usage_metadata", None)
             if usage_metadata is not None:
@@ -240,6 +242,7 @@ class GoogleGenAICaller(LLMCaller):
                     Message=parts[0].text,
                     LogProbs=logprobs,
                     Latency=latency,
+                    ResponseModel=response_model,
                     **token_count_kwargs,
                 )
             elif (
@@ -260,6 +263,7 @@ class GoogleGenAICaller(LLMCaller):
                     ToolCalls=tcs,
                     LogProbs=logprobs,
                     Latency=latency,
+                    ResponseModel=response_model,
                     **token_count_kwargs,
                 )
             else:

@@ -184,6 +184,8 @@ class ClaudeCaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
+            # get the model used for response
+            response_model = getattr(output, "model", None)
             if getattr(output, "content", None) is not None:
                 content = output.content
                 if isinstance(content[0], BetaThinkingBlock):
@@ -213,6 +215,7 @@ class ClaudeCaller(LLMCaller):
                             Role="assistant",
                             Message=formatted_content,
                             Latency=latency,
+                            ResponseModel=response_model,
                             **token_count_kwargs,
                         )
                     else:
@@ -221,6 +224,7 @@ class ClaudeCaller(LLMCaller):
                             Role="assistant",
                             Message="",
                             Latency=latency,
+                            ResponseModel=response_model,
                             **token_count_kwargs,
                         )
                         # Process ALL content items as tool calls
@@ -246,6 +250,7 @@ class ClaudeCaller(LLMCaller):
                         Role="assistant",
                         Message=text,
                         Latency=latency,
+                        ResponseModel=response_model,
                         **token_count_kwargs,
                     )
                 if len(content) > 1:

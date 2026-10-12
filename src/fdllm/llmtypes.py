@@ -37,13 +37,13 @@ from .logging_utils import get_logger, log_call_start, log_call_completion
 
 # Tenacity imports for superior retry functionality
 from tenacity import (
-    retry, 
-    stop_after_attempt, 
-    wait_exponential, 
+    retry,
+    stop_after_attempt,
+    wait_exponential,
     retry_if_exception_type,
     before_log,
-    after_log, 
-    before_sleep_log
+    after_log,
+    before_sleep_log,
 )
 from .openai.tokenizer import tokenize_chatgpt_messages
 from .constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_MAX_RETRIES
@@ -147,8 +147,10 @@ class AzureMistralAIModelType(LLMModelType):
 class AnthropicModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
 
+
 class AnthropicStreamingModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
+
 
 class BedrockModelType(LLMModelType):
     Api_Key_Env_Var: str = "AWS_API_KEYS"
@@ -183,6 +185,7 @@ class LLMMessage(BaseModel):
     TokensUsedReasoning: Optional[int] = None
     LogProbs: Optional[Any] = None
     Latency: Optional[float] = None
+    ResponseModel: Optional[str] = None
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     def __eq__(self, __value: object) -> bool:
@@ -331,66 +334,75 @@ class LLMCaller(ABC, BaseModel):
     Token_Limit_Completion: Optional[int] = None
     Defaults: Dict = Field(default_factory=dict)
     Arg_Names: Optional[LLMCallArgNames] = None
-    
+    strict_response_model_validation: bool = False
+
     # Thread-safe decorated methods created once during initialization
     _sync_call_with_retry: Optional[Callable] = None
     _async_call_with_retry: Optional[Callable] = None
-    
+
     def model_post_init(self, __context: Any) -> None:
         """Initialize decorated retry methods after model creation."""
-        super().model_post_init(__context) if hasattr(super(), 'model_post_init') else None
+        (
+            super().model_post_init(__context)
+            if hasattr(super(), "model_post_init")
+            else None
+        )
         self._create_retry_methods()
-    
+
     @property
     def logger(self) -> logging.Logger:
         """Get logger instance for this caller."""
         return get_logger(f"caller.{self.Model.Name or 'unknown'}")
-    
+
     def _create_retry_methods(self):
         """Create Tenacity-based retry methods with superior logging."""
-        
+
         # Sync version with Tenacity
         @retry(
             stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
             wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((
-                RateLimitErrorOpenAI,
-                RateLimitErrorAnthropic,
-                APIConnectionError,
-                ServerError,
-            )),
+            retry=retry_if_exception_type(
+                (
+                    RateLimitErrorOpenAI,
+                    RateLimitErrorAnthropic,
+                    APIConnectionError,
+                    ServerError,
+                )
+            ),
             before=before_log(self.logger, logging.DEBUG),
             before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
             after=after_log(self.logger, logging.DEBUG),
-            reraise=True
+            reraise=True,
         )
         def sync_retry_wrapper(*args, **kwargs):
             start_time = time.perf_counter()
             out = self.Func(*args, **kwargs)
             latency = time.perf_counter() - start_time
             return out, latency
-        
-        # Async version with Tenacity  
+
+        # Async version with Tenacity
         @retry(
             stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
             wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=retry_if_exception_type((
-                RateLimitErrorOpenAI,
-                RateLimitErrorAnthropic,
-                APIConnectionError,
-                ServerError,
-            )),
+            retry=retry_if_exception_type(
+                (
+                    RateLimitErrorOpenAI,
+                    RateLimitErrorAnthropic,
+                    APIConnectionError,
+                    ServerError,
+                )
+            ),
             before=before_log(self.logger, logging.DEBUG),
             before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
             after=after_log(self.logger, logging.DEBUG),
-            reraise=True
+            reraise=True,
         )
         async def async_retry_wrapper(*args, **kwargs):
             start_time = time.perf_counter()
             out = await self.AFunc(*args, **kwargs)
             latency = time.perf_counter() - start_time
             return out, latency
-        
+
         self._sync_call_with_retry = sync_retry_wrapper
         self._async_call_with_retry = async_retry_wrapper
 
@@ -437,15 +449,20 @@ class LLMCaller(ABC, BaseModel):
     ):
         # Ensure messages is a list for logging
         msg_list = messages if isinstance(messages, list) else [messages]
-        
+
         # Log call start
         start_time = log_call_start(self.logger, self.Model.Name, msg_list, "sync")
-        
+
         try:
-            kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+            kwargs = self._proc_call_args(
+                messages, max_tokens, response_schema, **kwargs
+            )
             response, latency = self._call(**kwargs)
-            formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
-            
+            formatted_output = self.format_output(
+                response, response_schema=response_schema, latency=latency
+            )
+            self._validate_response_model(formatted_output)
+
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)
             return formatted_output
@@ -463,15 +480,20 @@ class LLMCaller(ABC, BaseModel):
     ):
         # Ensure messages is a list for logging
         msg_list = messages if isinstance(messages, list) else [messages]
-        
+
         # Log call start
         start_time = log_call_start(self.logger, self.Model.Name, msg_list, "async")
-        
+
         try:
-            kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+            kwargs = self._proc_call_args(
+                messages, max_tokens, response_schema, **kwargs
+            )
             response, latency = await self._acall(**kwargs)
-            formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
-            
+            formatted_output = self.format_output(
+                response, response_schema=response_schema, latency=latency
+            )
+            self._validate_response_model(formatted_output)
+
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)
             return formatted_output
@@ -479,6 +501,34 @@ class LLMCaller(ABC, BaseModel):
             # Log failed completion
             log_call_completion(self.logger, self.Model.Name, start_time, error=e)
             raise
+
+    def _validate_response_model(self, formatted_output: LLMMessage):
+        if self.Model.Api_Model_Name is None:
+            raise ValueError(f"Api_Model_Name is not set for {self.Model.Name}")
+        else:
+            simple_api_model_name = self.Model.Api_Model_Name.split("/")[-1]
+        if formatted_output.ResponseModel is None:
+            self.logger.warning(
+                f"Couldn't retrieve response model name from formatted response for {self.Model.Name}"
+            )
+        elif formatted_output.ResponseModel != simple_api_model_name:
+            if formatted_output.ResponseModel.startswith(simple_api_model_name):
+                self.logger.warning(
+                    f"Response model name ({formatted_output.ResponseModel}) "
+                    f"contains additional suffix to Api_Model_Name ({simple_api_model_name}) "
+                    f"for {self.Model.Name}"
+                )
+            else:
+                msg = (
+                    f"Response model name ({formatted_output.ResponseModel}) "
+                    f"is different to Api_Model_Name ({simple_api_model_name}) "
+                    "by more than just a suffix "
+                    f"for {self.Model.Name}"
+                )
+                if self.strict_response_model_validation:
+                    raise ValueError(msg)
+                else:
+                    self.logger.warning(msg)
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         if isinstance(messages, LLMMessage):
