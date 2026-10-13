@@ -185,7 +185,7 @@ class ClaudeCaller(LLMCaller):
             return output
         else:
             # get the model used for response
-            response_model = getattr(output, "model", None)
+            response_model = self._parse_model_name_string(getattr(output, "model", None))
             if getattr(output, "content", None) is not None:
                 content = output.content
                 if isinstance(content[0], BetaThinkingBlock):

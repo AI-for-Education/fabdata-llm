@@ -503,25 +503,24 @@ class LLMCaller(ABC, BaseModel):
             raise
 
     def _validate_response_model(self, formatted_output: LLMMessage):
-        if self.Model.Api_Model_Name is None:
+        api_model_name_parsed = self._parse_model_name_string(self.Model.Api_Model_Name)
+        if api_model_name_parsed is None:
             raise ValueError(f"Api_Model_Name is not set for {self.Model.Name}")
-        else:
-            simple_api_model_name = self.Model.Api_Model_Name.split("/")[-1]
         if formatted_output.ResponseModel is None:
             self.logger.warning(
                 f"Couldn't retrieve response model name from formatted response for {self.Model.Name}"
             )
-        elif formatted_output.ResponseModel != simple_api_model_name:
-            if formatted_output.ResponseModel.startswith(simple_api_model_name):
+        elif formatted_output.ResponseModel != api_model_name_parsed:
+            if formatted_output.ResponseModel.startswith(api_model_name_parsed):
                 self.logger.warning(
                     f"Response model name ({formatted_output.ResponseModel}) "
-                    f"contains additional suffix to Api_Model_Name ({simple_api_model_name}) "
+                    f"contains additional suffix to Api_Model_Name ({api_model_name_parsed}) "
                     f"for {self.Model.Name}"
                 )
             else:
                 msg = (
                     f"Response model name ({formatted_output.ResponseModel}) "
-                    f"is different to Api_Model_Name ({simple_api_model_name}) "
+                    f"is different to Api_Model_Name ({api_model_name_parsed}) "
                     "by more than just a suffix "
                     f"for {self.Model.Name}"
                 )
@@ -529,6 +528,13 @@ class LLMCaller(ABC, BaseModel):
                     raise ValueError(msg)
                 else:
                     self.logger.warning(msg)
+
+    @staticmethod
+    def _parse_model_name_string(model_name: str | None):
+        if not isinstance(model_name, str):
+            return
+        else:
+            return model_name.split("/")[-1]
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         if isinstance(messages, LLMMessage):
