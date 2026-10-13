@@ -371,6 +371,29 @@ def test_format_output_with_tool_calls():
     assert result.Latency == 2.0
 
 
+def test_format_output_with_whitespace_and_tool_call():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(
+            message=SimpleNamespace(
+                content=" \n",
+                tool_calls=[SimpleNamespace(
+                    id="call_abc",
+                    function=SimpleNamespace(name="get_data", arguments='{"param": "value"}'),
+                )],
+            ),
+            logprobs=None,
+        )],
+        usage=None,
+    )
+
+    result = caller.format_output(output)
+
+    assert result.ToolCalls == [
+        LLMToolCall(ID="call_abc", Name="get_data", Args={"param": "value"})
+    ]
+
+
 def test_format_output_invalid():
     """Test format_output with invalid output"""
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)

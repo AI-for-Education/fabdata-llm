@@ -246,7 +246,7 @@ def _gpt_common_fmt_output(output, latency, model=None):
         error_meta["stop_reason"] = getattr(output.choices[0], "finish_reason", None)
         msg = output.choices[0].message
         logprobs = getattr(output.choices[0], "logprobs", None)
-        if msg.content:
+        if msg.content and msg.content.strip():
             out = LLMMessage(
                 Role="assistant",
                 Message=msg.content,

@@ -173,6 +173,25 @@ def test_format_output_with_tool_calls():
     assert result.Latency == 2.0
 
 
+def test_format_output_with_whitespace_and_tool_call():
+    caller = MistralCaller(model=TEST_MODEL)
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(
+            content=" \n",
+            tool_calls=[SimpleNamespace(
+                id="call_abc",
+                function=SimpleNamespace(name="get_weather", arguments='{"city": "NYC"}'),
+            )],
+        ))]
+    )
+
+    result = caller.format_output(output)
+
+    assert result.ToolCalls == [
+        LLMToolCall(ID="call_abc", Name="get_weather", Args={"city": "NYC"})
+    ]
+
+
 def test_format_output_invalid():
     """Test format_output with invalid output (neither content nor tool_calls)."""
     caller = MistralCaller(model=TEST_MODEL)

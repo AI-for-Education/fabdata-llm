@@ -85,7 +85,7 @@ class MistralCaller(LLMCaller):
                 raise EmptyLLMResponse("Empty response: no choices", **error_meta)
             error_meta["stop_reason"] = getattr(output.choices[0], "finish_reason", None)
             msg = output.choices[0].message
-            if msg.content:
+            if msg.content and msg.content.strip():
                 out = LLMMessage(
                     Role="assistant", Message=msg.content.lstrip(), Latency=latency
                 )
