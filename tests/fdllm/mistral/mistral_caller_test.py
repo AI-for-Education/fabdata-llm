@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from fdllm.mistralai import MistralCaller
 from fdllm.llmtypes import LLMMessage, LLMToolCall
+from fdllm.errors import EmptyLLMResponse
 
 try:
     from mistralai.models.chat_completion import ChatMessage
@@ -172,6 +173,25 @@ def test_format_output_with_tool_calls():
     assert result.Latency == 2.0
 
 
+def test_format_output_with_whitespace_and_tool_call():
+    caller = MistralCaller(model=TEST_MODEL)
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(
+            content=" \n",
+            tool_calls=[SimpleNamespace(
+                id="call_abc",
+                function=SimpleNamespace(name="get_weather", arguments='{"city": "NYC"}'),
+            )],
+        ))]
+    )
+
+    result = caller.format_output(output)
+
+    assert result.ToolCalls == [
+        LLMToolCall(ID="call_abc", Name="get_weather", Args={"city": "NYC"})
+    ]
+
+
 def test_format_output_invalid():
     """Test format_output with invalid output (neither content nor tool_calls)."""
     caller = MistralCaller(model=TEST_MODEL)
@@ -184,6 +204,49 @@ def test_format_output_invalid():
 
     with pytest.raises(ValueError, match="Output must be either content or tool call"):
         caller.format_output(output)
+
+
+@pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])
+def test_format_output_no_choices(choices):
+    """Test format_output with an empty or missing choices list."""
+    caller = MistralCaller(model=TEST_MODEL)
+
+    output = SimpleNamespace(choices=choices)
+
+    with pytest.raises(EmptyLLMResponse, match="no choices") as exc_info:
+        caller.format_output(output)
+    assert exc_info.value.provider == "mistral"
+    assert exc_info.value.retryable is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        SimpleNamespace(content="", tool_calls=None),
+        SimpleNamespace(content=" \n", tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=[]),
+    ],
+    ids=["empty_str", "whitespace", "none", "empty_tool_calls"],
+)
+@pytest.mark.parametrize(
+    "finish_reason, retryable", [("stop", True), ("length", False)]
+)
+def test_format_output_empty_message(message, finish_reason, retryable):
+    """Test blank content / empty tool_calls raise instead of returning a message."""
+    caller = MistralCaller(model=TEST_MODEL)
+
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)]
+    )
+
+    with pytest.raises(EmptyLLMResponse) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
 
 
 def test_format_output_generator():
