@@ -487,21 +487,27 @@ class LLMCaller(ABC, BaseModel):
             raise ValueError(f"Api_Model_Name is not set for {self.Model.Name}")
         if formatted_output.ResponseModel is None:
             self.logger.warning(
-                f"Couldn't retrieve response model name from formatted response for {self.Model.Name}"
+                "Couldn't retrieve response model name from formatted response "
+                " for {self.Model.Name}"
             )
         elif formatted_output.ResponseModel != api_model_name_parsed:
             if formatted_output.ResponseModel.startswith(api_model_name_parsed):
                 self.logger.warning(
                     f"Response model name ({formatted_output.ResponseModel}) "
-                    f"contains additional suffix to Api_Model_Name ({api_model_name_parsed}) "
-                    f"for {self.Model.Name}"
+                    "contains additional suffix to Api_Model_Name "
+                    f"({api_model_name_parsed}) for {self.Model.Name}"
+                )
+            elif api_model_name_parsed.startswith(formatted_output.ResponseModel):
+                self.logger.warning(
+                    f"Api_Model_Name ({api_model_name_parsed}) "
+                    "contains additional suffix to Response model name "
+                    f"({formatted_output.ResponseModel}) for {self.Model.Name}"
                 )
             else:
                 msg = (
                     f"Response model name ({formatted_output.ResponseModel}) "
                     f"is different to Api_Model_Name ({api_model_name_parsed}) "
-                    "by more than just a suffix "
-                    f"for {self.Model.Name}"
+                    f"by more than just a suffix for {self.Model.Name}"
                 )
                 if self.strict_response_model_validation:
                     raise ValueError(msg)
