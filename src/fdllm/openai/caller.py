@@ -167,7 +167,7 @@ class OpenAICaller(LLMCaller):
         response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
-        out = _gpt_common_fmt_output(output, latency)
+        out = _gpt_common_fmt_output(output, latency, model=self.Model.Name)
         if isinstance(out, LLMMessage):
             out.ResponseModel = self._parse_model_name_string(out.ResponseModel)
         return out
