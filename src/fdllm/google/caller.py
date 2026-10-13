@@ -230,15 +230,15 @@ class GoogleGenAICaller(LLMCaller):
             return output
         else:
             # get the model used for response
-            response_model = getattr(output, "model_version", None)
+            response_model = self._parse_model_name_string(getattr(output, "model_version", None))
             ## token counts
             usage_metadata = getattr(output, "usage_metadata", None)
             if usage_metadata is not None:
-                token_count_kwargs = dict(
-                    TokensUsed=usage_metadata.total_token_count,
-                    TokensUsedCompletion=usage_metadata.candidates_token_count,
-                    TokensUsedReasoning=usage_metadata.thoughts_token_count,
-                )
+                token_count_kwargs = {
+                    "TokensUsed": usage_metadata.total_token_count,
+                    "TokensUsedCompletion": usage_metadata.candidates_token_count,
+                    "TokensUsedReasoning": usage_metadata.thoughts_token_count,
+                }
             else:
                 token_count_kwargs = {}
             #####

@@ -167,7 +167,10 @@ class OpenAICaller(LLMCaller):
         response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
-        return _gpt_common_fmt_output(output, latency, model=self.Model.Name)
+        out = _gpt_common_fmt_output(output, latency)
+        if isinstance(out, LLMMessage):
+            out.ResponseModel = self._parse_model_name_string(out.ResponseModel)
+        return out
 
     def tokenize(self, messagelist: List[LLMMessage]):
         if self.Model.Vision:

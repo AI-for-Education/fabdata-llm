@@ -175,7 +175,7 @@ class ClaudeCaller(LLMCaller):
             return output
         else:
             # get the model used for response
-            response_model = getattr(output, "model", None)
+            response_model = self._parse_model_name_string(getattr(output, "model", None))
             content = getattr(output, "content", None)
             error_meta = dict(
                 provider="anthropic",
