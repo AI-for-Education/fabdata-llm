@@ -692,7 +692,7 @@ class TestFormatOutput:
         """Test response model validation modes against different possible mismatches"""
         caller.response_model_validation_mode = response_validation_mode
         output = make_output([make_text_block("Hello")])
-        api_model_name = caller.Model.Api_Model_Name
+        api_model_name = caller._parse_model_name_string(caller.Model.Api_Model_Name)
         if match_type == "match":
             output.model = api_model_name
         elif match_type == "response_model_suffix":
@@ -718,6 +718,7 @@ class TestFormatOutput:
         else:
             try:
                 caller._validate_response_model(formatted_output)
+                raise ValueError()
             except LLMResponseModelNameMismatch as err:
                 assert err.retryable is False
             except Exception:

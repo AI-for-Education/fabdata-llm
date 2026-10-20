@@ -521,7 +521,10 @@ class LLMCaller(ABC, BaseModel):
                     f"is different to Api_Model_Name ({api_model_name_parsed}) "
                     f"by more than just a suffix for {self.Model.Name}"
                 )
-                if self.response_model_validation_mode == ResponseValidationMode.STRICT:
+                if self.response_model_validation_mode in (
+                    ResponseValidationMode.STRICT,
+                    ResponseValidationMode.ALLOW_PARTIAL,
+                ):
                     raise LLMResponseModelNameMismatch(msg)
                 else:
                     self.logger.warning(msg)

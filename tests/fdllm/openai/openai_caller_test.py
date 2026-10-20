@@ -574,7 +574,7 @@ def test_response_model_validation(match_type, response_validation_mode):
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     caller.response_model_validation_mode = response_validation_mode
     output = TEST_RESULT_OPENAI
-    api_model_name = caller.Model.Api_Model_Name
+    api_model_name = caller._parse_model_name_string(caller.Model.Api_Model_Name)
     if match_type == "match":
         output.model = api_model_name
     elif match_type == "response_model_suffix":
@@ -600,6 +600,7 @@ def test_response_model_validation(match_type, response_validation_mode):
     else:
         try:
             caller._validate_response_model(formatted_output)
+            raise ValueError()
         except LLMResponseModelNameMismatch as err:
             assert err.retryable is False
         except Exception:

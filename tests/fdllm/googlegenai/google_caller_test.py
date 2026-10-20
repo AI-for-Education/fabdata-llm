@@ -396,6 +396,7 @@ def test_format_output_text_response():
 def test_response_model_validation(match_type, response_validation_mode):
     """Test response model validation modes against different possible mismatches"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
+    caller.response_model_validation_mode = response_validation_mode
     # Mock Google's response structure
     part = SimpleNamespace(text="Test response", function_call=None)
     content = SimpleNamespace(parts=[part])
@@ -410,7 +411,7 @@ def test_response_model_validation(match_type, response_validation_mode):
             model_version=caller.Model.Api_Model_Name,
         )
     
-    api_model_name = caller.Model.Api_Model_Name
+    api_model_name = caller._parse_model_name_string(caller.Model.Api_Model_Name)
     if match_type == "match":
         output.model_version = api_model_name
     elif match_type == "response_model_suffix":
@@ -436,6 +437,7 @@ def test_response_model_validation(match_type, response_validation_mode):
     else:
         try:
             caller._validate_response_model(formatted_output)
+            raise ValueError()
         except LLMResponseModelNameMismatch as err:
             assert err.retryable is False
         except Exception:
