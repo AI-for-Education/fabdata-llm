@@ -2,6 +2,7 @@
 Tests for Google GenAI caller.
 Tests cover message formatting, tools, images, system message handling, and output parsing.
 """
+
 import pytest
 from types import SimpleNamespace, GeneratorType
 from unittest.mock import Mock, patch, MagicMock
@@ -10,12 +11,17 @@ from PIL import Image
 from google.genai.types import BlockedReason, FinishReason
 
 from fdllm import GoogleGenAICaller
-from fdllm.errors import EmptyLLMResponse, InvalidProviderResponse, LLMContentFiltered
-from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
+from fdllm.errors import (
+    EmptyLLMResponse,
+    InvalidProviderResponse,
+    LLMContentFiltered,
+    LLMResponseModelNameMismatch,
+)
+from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage, ResponseValidationMode
 from fdllm.tooluse import Tool, ToolParam
 
-
 # ===== Basic GoogleGenAICaller Tests =====
+
 
 def test_init_google():
     """Test GoogleGenAICaller initialization"""
@@ -53,14 +59,22 @@ def test_format_message_assistant_to_model():
 
 # ===== Tool Handling Tests =====
 
+
 def test_format_message_tool_role():
     """Test formatting of messages with tool role"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     tool_calls = [
-            LLMToolCall(ID="call_123", Name="get_weather", Args={"city": "NYC"}, Response='{"temp": 72}'),
-            LLMToolCall(ID="call_456", Name="get_time", Args={}, Response='{"time": "12:00"}'),
-        ]
+        LLMToolCall(
+            ID="call_123",
+            Name="get_weather",
+            Args={"city": "NYC"},
+            Response='{"temp": 72}',
+        ),
+        LLMToolCall(
+            ID="call_456", Name="get_time", Args={}, Response='{"time": "12:00"}'
+        ),
+    ]
 
     message = LLMMessage(Role="tool", ToolCalls=tool_calls)
     result = caller.format_message(message)
@@ -69,7 +83,9 @@ def test_format_message_tool_role():
     assert len(result["parts"]) == 2
     assert result["parts"][0]["function_response"]["id"] == "call_123"
     assert result["parts"][0]["function_response"]["name"] == "get_weather"
-    assert result["parts"][0]["function_response"]["response"] == {"result": '{"temp": 72}'}
+    assert result["parts"][0]["function_response"]["response"] == {
+        "result": '{"temp": 72}'
+    }
 
 
 def test_format_message_assistant_tool_calls():
@@ -77,8 +93,8 @@ def test_format_message_assistant_tool_calls():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     tool_calls = [
-            LLMToolCall(ID="call_789", Name="search", Args={"query": "test"}),
-        ]
+        LLMToolCall(ID="call_789", Name="search", Args={"query": "test"}),
+    ]
 
     message = LLMMessage(Role="assistant", ToolCalls=tool_calls)
     result = caller.format_message(message)
@@ -95,18 +111,20 @@ def test_format_tool():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     class TestTool(Tool):
-            name = "test_tool"
-            description = "A test tool"
-            params = {
-                "param1": ToolParam(type="string", description="First param", required=True),
-                "param2": ToolParam(type="integer", description="Second param", default=42),
-            }
+        name = "test_tool"
+        description = "A test tool"
+        params = {
+            "param1": ToolParam(
+                type="string", description="First param", required=True
+            ),
+            "param2": ToolParam(type="integer", description="Second param", default=42),
+        }
 
-            def execute(self, **params):
-                return "result"
+        def execute(self, **params):
+            return "result"
 
-            async def aexecute(self, **params):
-                return "result"
+        async def aexecute(self, **params):
+            return "result"
 
     tool = TestTool()
     result = caller.format_tool(tool)
@@ -127,15 +145,15 @@ def test_format_tool_no_params():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     class SimpleTool(Tool):
-            name = "simple_tool"
-            description = "Simple"
-            params = {}
+        name = "simple_tool"
+        description = "Simple"
+        params = {}
 
-            def execute(self, **params):
-                return "result"
+        def execute(self, **params):
+            return "result"
 
-            async def aexecute(self, **params):
-                return "result"
+        async def aexecute(self, **params):
+            return "result"
 
     tool = SimpleTool()
     result = caller.format_tool(tool)
@@ -148,15 +166,18 @@ def test_format_tool_no_params():
 
 # ===== Image Handling Tests =====
 
+
 def test_format_message_with_images():
     """Test formatting of user messages with images"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
     caller.Model.Vision = True
 
-    img = Image.new('RGB', (10, 10), color='red')
+    img = Image.new("RGB", (10, 10), color="red")
     llm_image = LLMImage(Img=img)
 
-    message = LLMMessage(Role="user", Message="What's in this image?", Images=[llm_image])
+    message = LLMMessage(
+        Role="user", Message="What's in this image?", Images=[llm_image]
+    )
     result = caller.format_message(message)
 
     assert result["role"] == "user"
@@ -172,12 +193,12 @@ def test_format_message_images_non_vision_model():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
     caller.Model.Vision = False
 
-    img = Image.new('RGB', (10, 10))
+    img = Image.new("RGB", (10, 10))
     llm_image = LLMImage(Img=img)
     message = LLMMessage(Role="user", Message="test", Images=[llm_image])
 
     with pytest.raises(NotImplementedError, match="doesn't support images"):
-            caller.format_message(message)
+        caller.format_message(message)
 
 
 def test_format_message_multiple_images():
@@ -185,8 +206,8 @@ def test_format_message_multiple_images():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
     caller.Model.Vision = True
 
-    img1 = Image.new('RGB', (10, 10), color='red')
-    img2 = Image.new('RGB', (10, 10), color='blue')
+    img1 = Image.new("RGB", (10, 10), color="red")
+    img2 = Image.new("RGB", (10, 10), color="blue")
     llm_images = [LLMImage(Img=img1), LLMImage(Img=img2)]
 
     message = LLMMessage(Role="user", Message="Compare these", Images=llm_images)
@@ -198,24 +219,25 @@ def test_format_message_multiple_images():
 
 # ===== System Message Handling Tests (Google-Specific) =====
 
+
 def test_format_messagelist_extracts_system_message():
     """Test that system messages are extracted to Defaults"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     messages = [
-            LLMMessage(Role="system", Message="You are helpful"),
-            LLMMessage(Role="user", Message="Hello"),
-            LLMMessage(Role="assistant", Message="Hi there"),
-        ]
+        LLMMessage(Role="system", Message="You are helpful"),
+        LLMMessage(Role="user", Message="Hello"),
+        LLMMessage(Role="assistant", Message="Hi there"),
+    ]
 
     result = caller.format_messagelist(messages)
 
-        # System message should NOT be in result
+    # System message should NOT be in result
     assert len(result) == 2
     assert result[0]["role"] == "user"
     assert result[1]["role"] == "model"
 
-        # System message should be in Defaults
+    # System message should be in Defaults
     assert caller.Defaults["system"] == "You are helpful"
 
 
@@ -224,14 +246,14 @@ def test_format_messagelist_multiple_system_messages():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     messages = [
-            LLMMessage(Role="system", Message="First system"),
-            LLMMessage(Role="user", Message="Hello"),
-            LLMMessage(Role="system", Message="Second system"),
-        ]
+        LLMMessage(Role="system", Message="First system"),
+        LLMMessage(Role="user", Message="Hello"),
+        LLMMessage(Role="system", Message="Second system"),
+    ]
 
     result = caller.format_messagelist(messages)
 
-        # Only first system message should be stored
+    # Only first system message should be stored
     assert caller.Defaults["system"] == "First system"
 
 
@@ -241,16 +263,17 @@ def test_format_messagelist_no_system_message():
     caller.Defaults["system"] = "Old system message"
 
     messages = [
-            LLMMessage(Role="user", Message="Hello"),
-        ]
+        LLMMessage(Role="user", Message="Hello"),
+    ]
 
     result = caller.format_messagelist(messages)
 
-        # System should be removed from Defaults
+    # System should be removed from Defaults
     assert "system" not in caller.Defaults
 
 
 # ===== Config Processing Tests (_proc_call_args) =====
+
 
 def test_proc_call_args_system_instruction():
     """Test that system instruction is moved to config"""
@@ -308,12 +331,14 @@ def test_proc_call_args_moves_params_to_config():
 
     messages = [LLMMessage(Role="user", Message="test")]
     kwargs = caller._proc_call_args(
-            messages, 100, None,
-            temperature=0.7,
-            top_p=0.9,
-            top_k=40,
-            seed=42,
-        )
+        messages,
+        100,
+        None,
+        temperature=0.7,
+        top_p=0.9,
+        top_k=40,
+        seed=42,
+    )
 
     config = kwargs["config"]
     assert config["temperature"] == 0.7
@@ -325,22 +350,23 @@ def test_proc_call_args_moves_params_to_config():
 
 # ===== Output Formatting Tests =====
 
+
 def test_format_output_text_response():
     """Test format_output with text response"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
-        # Mock Google's response structure
+    # Mock Google's response structure
     part = SimpleNamespace(text="Test response", function_call=None)
     content = SimpleNamespace(parts=[part])
     candidate = SimpleNamespace(content=content, logprobs_result=None)
     output = SimpleNamespace(
-            candidates=[candidate],
-            usage_metadata=SimpleNamespace(
-                total_token_count=100,
-                candidates_token_count=50,
-                thoughts_token_count=None,
-            )
-        )
+        candidates=[candidate],
+        usage_metadata=SimpleNamespace(
+            total_token_count=100,
+            candidates_token_count=50,
+            thoughts_token_count=None,
+        ),
+    )
 
     result = caller.format_output(output, latency=1.5)
 
@@ -352,6 +378,70 @@ def test_format_output_text_response():
     assert result.Latency == 1.5
 
 
+# ===== Response Model Name Validation Tests =====
+
+
+@pytest.mark.parametrize(
+    "match_type",
+    ["match", "response_model_suffix", "api_model_suffix", "mismatch"],
+)
+@pytest.mark.parametrize(
+    "response_validation_mode",
+    [
+        ResponseValidationMode.STRICT,
+        ResponseValidationMode.ALLOW_PARTIAL,
+        ResponseValidationMode.ALLOW_ALL,
+    ],
+)
+def test_response_model_validation(match_type, response_validation_mode):
+    """Test response model validation modes against different possible mismatches"""
+    caller = GoogleGenAICaller(model="gemini-2.0-flash")
+    # Mock Google's response structure
+    part = SimpleNamespace(text="Test response", function_call=None)
+    content = SimpleNamespace(parts=[part])
+    candidate = SimpleNamespace(content=content, logprobs_result=None)
+    output = SimpleNamespace(
+            candidates=[candidate],
+            usage_metadata=SimpleNamespace(
+                total_token_count=100,
+                candidates_token_count=50,
+                thoughts_token_count=None,
+            ),
+            model_version=caller.Model.Api_Model_Name,
+        )
+    
+    api_model_name = caller.Model.Api_Model_Name
+    if match_type == "match":
+        output.model_version = api_model_name
+    elif match_type == "response_model_suffix":
+        output.model_version = f"{api_model_name}_suffix"
+    elif match_type == "api_model_suffix":
+        output.model_version = api_model_name[:-2]
+    elif match_type == "mismatch":
+        output.model_version = api_model_name[:-2][2:]
+
+    formatted_output = caller.format_output(output)
+    assert isinstance(formatted_output, LLMMessage)
+
+    if (
+        response_validation_mode == ResponseValidationMode.ALLOW_ALL
+        or match_type == "match"
+        or (
+            response_validation_mode == ResponseValidationMode.ALLOW_PARTIAL
+            and match_type in ("response_model_suffix", "api_model_suffix")
+        )
+    ):
+        caller._validate_response_model(formatted_output)
+        return
+    else:
+        try:
+            caller._validate_response_model(formatted_output)
+        except LLMResponseModelNameMismatch as err:
+            assert err.retryable is False
+        except Exception:
+            raise
+
+
 def test_format_output_with_reasoning_tokens():
     """Test format_output with thoughts_token_count (reasoning)"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
@@ -360,13 +450,13 @@ def test_format_output_with_reasoning_tokens():
     content = SimpleNamespace(parts=[part])
     candidate = SimpleNamespace(content=content, logprobs_result=None)
     output = SimpleNamespace(
-            candidates=[candidate],
-            usage_metadata=SimpleNamespace(
-                total_token_count=150,
-                candidates_token_count=50,
-                thoughts_token_count=100,  # Reasoning tokens
-            )
-        )
+        candidates=[candidate],
+        usage_metadata=SimpleNamespace(
+            total_token_count=150,
+            candidates_token_count=50,
+            thoughts_token_count=100,  # Reasoning tokens
+        ),
+    )
 
     result = caller.format_output(output)
 
@@ -381,14 +471,14 @@ def test_format_output_without_usage_metadata():
     content = SimpleNamespace(parts=[part])
     candidate = SimpleNamespace(content=content, logprobs_result=None)
     output = SimpleNamespace(
-            candidates=[candidate],
-            usage_metadata=None,
-        )
+        candidates=[candidate],
+        usage_metadata=None,
+    )
 
     result = caller.format_output(output)
 
     assert result.Message == "Response"
-        # Should not crash, token counts won't be set
+    # Should not crash, token counts won't be set
 
 
 def test_format_output_with_tool_calls():
@@ -396,23 +486,21 @@ def test_format_output_with_tool_calls():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     part = SimpleNamespace(
-            text=None,
-            function_call=SimpleNamespace(
-                id="call_abc",
-                name="get_data",
-                args={"param": "value"}
-            )
-        )
+        text=None,
+        function_call=SimpleNamespace(
+            id="call_abc", name="get_data", args={"param": "value"}
+        ),
+    )
     content = SimpleNamespace(parts=[part])
     candidate = SimpleNamespace(content=content, logprobs_result=None)
     output = SimpleNamespace(
-            candidates=[candidate],
-            usage_metadata=SimpleNamespace(
-                total_token_count=75,
-                candidates_token_count=25,
-                thoughts_token_count=None,
-            )
-        )
+        candidates=[candidate],
+        usage_metadata=SimpleNamespace(
+            total_token_count=75,
+            candidates_token_count=25,
+            thoughts_token_count=None,
+        ),
+    )
 
     result = caller.format_output(output)
 
@@ -430,13 +518,13 @@ def test_format_output_multiple_tool_calls():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     parts = [
-            SimpleNamespace(
-                function_call=SimpleNamespace(id="call_1", name="tool1", args={})
-            ),
-            SimpleNamespace(
-                function_call=SimpleNamespace(id="call_2", name="tool2", args={})
-            ),
-        ]
+        SimpleNamespace(
+            function_call=SimpleNamespace(id="call_1", name="tool1", args={})
+        ),
+        SimpleNamespace(
+            function_call=SimpleNamespace(id="call_2", name="tool2", args={})
+        ),
+    ]
     content = SimpleNamespace(parts=parts)
     candidate = SimpleNamespace(content=content, logprobs_result=None)
     output = SimpleNamespace(candidates=[candidate], usage_metadata=None)
@@ -450,24 +538,24 @@ def test_format_output_with_logprobs():
     """Test format_output with logprobs conversion"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
-        # Mock Google's logprobs structure
+    # Mock Google's logprobs structure
     chosen_candidate = SimpleNamespace(token="hello", log_probability=-0.5)
     top_candidate = SimpleNamespace(
-            candidates=[
-                SimpleNamespace(token="hello", log_probability=-0.5),
-                SimpleNamespace(token="hi", log_probability=-1.0),
-            ]
-        )
+        candidates=[
+            SimpleNamespace(token="hello", log_probability=-0.5),
+            SimpleNamespace(token="hi", log_probability=-1.0),
+        ]
+    )
 
     part = SimpleNamespace(text="hello", function_call=None)
     content = SimpleNamespace(parts=[part])
     candidate = SimpleNamespace(
-            content=content,
-            logprobs_result=SimpleNamespace(
-                chosen_candidates=[chosen_candidate],
-                top_candidates=[top_candidate],
-            )
-        )
+        content=content,
+        logprobs_result=SimpleNamespace(
+            chosen_candidates=[chosen_candidate],
+            top_candidates=[top_candidate],
+        ),
+    )
     output = SimpleNamespace(candidates=[candidate], usage_metadata=None)
 
     result = caller.format_output(output)
@@ -483,14 +571,14 @@ def test_format_output_invalid():
     """Test format_output with invalid output"""
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
-        # Part with neither text nor function_call
+    # Part with neither text nor function_call
     part = SimpleNamespace(text=None, function_call=None)
     content = SimpleNamespace(parts=[part])
     candidate = SimpleNamespace(content=content, logprobs_result=None)
     output = SimpleNamespace(candidates=[candidate], usage_metadata=None)
 
     with pytest.raises(ValueError, match="Output must be either content or tool call"):
-            caller.format_output(output)
+        caller.format_output(output)
 
 
 def test_format_output_no_candidates():
@@ -616,7 +704,7 @@ def test_format_output_generator():
     caller = GoogleGenAICaller(model="gemini-2.0-flash")
 
     def gen():
-            yield "test"
+        yield "test"
 
     generator = gen()
     result = caller.format_output(generator)
@@ -625,6 +713,7 @@ def test_format_output_generator():
 
 
 # ===== Token Counting Tests =====
+
 
 def test_count_tokens():
     """Test count_tokens API call"""

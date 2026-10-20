@@ -14,9 +14,9 @@ from pydantic import BaseModel
 
 from fdllm import ClaudeCaller
 from fdllm.anthropic import ClaudeStreamingCaller
-from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
+from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage, ResponseValidationMode
 from fdllm.tooluse import Tool, ToolParam, ToolItem
-from fdllm.errors import EmptyLLMResponse, LLMContentFiltered
+from fdllm.errors import EmptyLLMResponse, LLMContentFiltered, LLMResponseModelNameMismatch
 
 try:
     from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
@@ -57,7 +57,8 @@ def make_output(
     content: list,
     input_tokens: int = 10,
     output_tokens: int = 10,
-    thinking_tokens: int = None,
+    thinking_tokens: int | None = None,
+    model: str = DEFAULT_CLAUDE_MODEL,
 ):
     """Helper to create mock API output."""
     extra = {}
@@ -65,7 +66,8 @@ def make_output(
         extra["output_tokens_details"] = {"thinking_tokens": thinking_tokens}
     return SimpleNamespace(
         content=content,
-        usage=Usage(input_tokens=input_tokens, output_tokens=output_tokens, **extra)
+        usage=Usage(input_tokens=input_tokens, output_tokens=output_tokens, **extra),
+        model=model,
     )
 
 
@@ -671,6 +673,56 @@ class TestFormatOutput:
         assert err.block_types == ["thinking"]
         # metadata and message never carry generated text
         assert "Hmm..." not in str(err)
+
+    # ===== Response Model Name Validation Tests =====
+
+    @pytest.mark.parametrize(
+        "match_type",
+        ["match", "response_model_suffix", "api_model_suffix", "mismatch"],
+    )
+    @pytest.mark.parametrize(
+        "response_validation_mode",
+        [
+            ResponseValidationMode.STRICT,
+            ResponseValidationMode.ALLOW_PARTIAL,
+            ResponseValidationMode.ALLOW_ALL,
+        ],
+    )
+    def test_response_model_validation(self, caller, match_type, response_validation_mode):
+        """Test response model validation modes against different possible mismatches"""
+        caller.response_model_validation_mode = response_validation_mode
+        output = make_output([make_text_block("Hello")])
+        api_model_name = caller.Model.Api_Model_Name
+        if match_type == "match":
+            output.model = api_model_name
+        elif match_type == "response_model_suffix":
+            output.model = f"{api_model_name}_suffix"
+        elif match_type == "api_model_suffix":
+            output.model = api_model_name[:-2]
+        elif match_type == "mismatch":
+            output.model = api_model_name[:-2][2:]
+
+        formatted_output = caller.format_output(output)
+        assert isinstance(formatted_output, LLMMessage)
+
+        if (
+            response_validation_mode == ResponseValidationMode.ALLOW_ALL
+            or match_type == "match"
+            or (
+                response_validation_mode == ResponseValidationMode.ALLOW_PARTIAL
+                and match_type in ("response_model_suffix", "api_model_suffix")
+            )
+        ):
+            caller._validate_response_model(formatted_output)
+            return
+        else:
+            try:
+                caller._validate_response_model(formatted_output)
+            except LLMResponseModelNameMismatch as err:
+                assert err.retryable is False
+            except Exception:
+                raise
+
 
 
 # ============================================================================
