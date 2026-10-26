@@ -3,32 +3,26 @@ Tests for Anthropic ClaudeCaller and ClaudeStreamingCaller.
 Tests cover initialization, message formatting, tools, images, system messages, and output parsing.
 """
 import pytest
+import asyncio
 import json
 from types import SimpleNamespace, GeneratorType
 from typing import List
-from pathlib import Path
 from unittest.mock import Mock, patch
 from PIL import Image
 
 from pydantic import BaseModel
-from dotenv import load_dotenv
 
 from fdllm import ClaudeCaller
 from fdllm.anthropic import ClaudeStreamingCaller
-from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
+from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage, ResponseValidationMode
 from fdllm.tooluse import Tool, ToolParam, ToolItem
-from fdllm.sysutils import register_models
+from fdllm.errors import EmptyLLMResponse, LLMContentFiltered, LLMResponseModelNameMismatch
 
 try:
     from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
     from anthropic.types import Usage
 except ImportError:
     pytest.skip("Anthropic SDK not installed", allow_module_level=True)
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE.parent
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
 
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 
@@ -59,11 +53,21 @@ def make_text_block(text: str):
     return BetaTextBlock(text=text, type="text")
 
 
-def make_output(content: list, input_tokens: int = 10, output_tokens: int = 10):
+def make_output(
+    content: list,
+    input_tokens: int = 10,
+    output_tokens: int = 10,
+    thinking_tokens: int | None = None,
+    model: str = DEFAULT_CLAUDE_MODEL,
+):
     """Helper to create mock API output."""
+    extra = {}
+    if thinking_tokens is not None:
+        extra["output_tokens_details"] = {"thinking_tokens": thinking_tokens}
     return SimpleNamespace(
         content=content,
-        usage=Usage(input_tokens=input_tokens, output_tokens=output_tokens)
+        usage=Usage(input_tokens=input_tokens, output_tokens=output_tokens, **extra),
+        model=model,
     )
 
 
@@ -112,9 +116,9 @@ class TestInitialization:
         """Test ClaudeStreamingCaller initialization."""
         caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
         assert caller.Model.Name == DEFAULT_CLAUDE_MODEL
-        # Streaming caller should have different retry methods
-        assert caller._sync_call_with_retry is not None
-        assert caller._async_call_with_retry is not None
+        # Streaming caller only retries rate limits at the transport level
+        from anthropic import RateLimitError
+        assert caller._transport_errors == (RateLimitError,)
 
 
 # ============================================================================
@@ -479,37 +483,41 @@ class TestFormatOutput:
 
     def test_with_thinking_block(self, caller):
         """Test format_output with BetaThinkingBlock (reasoning)."""
-        thinking = BetaThinkingBlock(type="thinking", thinking="Hmm...", signature="sig")
-        output = SimpleNamespace(
-            content=[thinking, make_text_block("Answer")],
-            usage=Usage(input_tokens=10, output_tokens=30)
+        # thinking="" is the realistic shape under the default display ("omitted")
+        thinking = BetaThinkingBlock(type="thinking", thinking="", signature="sig")
+        output = make_output(
+            [thinking, make_text_block("Answer")], output_tokens=30, thinking_tokens=20
         )
 
-        with patch.object(caller.Client.beta.messages, 'count_tokens',
-                          return_value=SimpleNamespace(input_tokens=5)):
+        with patch.object(caller.Client.beta.messages, "count_tokens") as ct:
             result = caller.format_output(output)
 
         assert result.Message == "Answer"
-        assert result.TokensUsedReasoning == 5
+        assert result.TokensUsedReasoning == 20
+        assert not ct.called
+
+    def test_thinking_tokens_typed_details(self, caller):
+        """output_tokens_details as a typed object (newer SDKs) is read too."""
+        output = make_output([make_text_block("Answer")], output_tokens=30)
+        output.usage.output_tokens_details = SimpleNamespace(thinking_tokens=12)
+        result = caller.format_output(output)
+
+        assert result.TokensUsedReasoning == 12
 
     def test_with_thinking_text_then_tool_use(self, caller):
         """Test documented extended-thinking shape: thinking -> text -> tool_use."""
         thinking = BetaThinkingBlock(type="thinking", thinking="Need a tool", signature="sig")
-        output = SimpleNamespace(
-            content=[
+        output = make_output(
+            [
                 thinking,
                 make_text_block("I'll look that up."),
                 make_tool_block("c1", "search", {"q": "test"}),
             ],
-            usage=Usage(input_tokens=10, output_tokens=30),
+            output_tokens=30,
+            thinking_tokens=5,
         )
 
-        with patch.object(
-            caller.Client.beta.messages,
-            "count_tokens",
-            return_value=SimpleNamespace(input_tokens=5),
-        ):
-            result = caller.format_output(output)
+        result = caller.format_output(output)
 
         assert result.Message == "I'll look that up."
         assert result.TokensUsedReasoning == 5
@@ -521,20 +529,16 @@ class TestFormatOutput:
     def test_with_thinking_then_tool_use(self, caller):
         """Test documented extended-thinking shape: thinking -> tool_use."""
         thinking = BetaThinkingBlock(type="thinking", thinking="Need a tool", signature="sig")
-        output = SimpleNamespace(
-            content=[
+        output = make_output(
+            [
                 thinking,
                 make_tool_block("c1", "search", {"q": "test"}),
             ],
-            usage=Usage(input_tokens=10, output_tokens=30),
+            output_tokens=30,
+            thinking_tokens=5,
         )
 
-        with patch.object(
-            caller.Client.beta.messages,
-            "count_tokens",
-            return_value=SimpleNamespace(input_tokens=5),
-        ):
-            result = caller.format_output(output)
+        result = caller.format_output(output)
 
         assert result.Message == ""
         assert result.TokensUsedReasoning == 5
@@ -546,21 +550,17 @@ class TestFormatOutput:
     def test_with_thinking_then_multiple_tool_calls(self, caller):
         """Regression test: thinking -> multiple tool_use blocks keeps all calls."""
         thinking = BetaThinkingBlock(type="thinking", thinking="Need tools", signature="sig")
-        output = SimpleNamespace(
-            content=[
+        output = make_output(
+            [
                 thinking,
                 make_tool_block("c1", "search", {"q": "test"}),
                 make_tool_block("c2", "lookup", {"id": 1}),
             ],
-            usage=Usage(input_tokens=10, output_tokens=30),
+            output_tokens=30,
+            thinking_tokens=5,
         )
 
-        with patch.object(
-            caller.Client.beta.messages,
-            "count_tokens",
-            return_value=SimpleNamespace(input_tokens=5),
-        ):
-            result = caller.format_output(output)
+        result = caller.format_output(output)
 
         assert result.Message == ""
         assert result.TokensUsedReasoning == 5
@@ -606,16 +606,124 @@ class TestFormatOutput:
         assert isinstance(result, GeneratorType)
 
     def test_empty_content_raises(self, caller):
-        """Test format_output with empty content list raises IndexError."""
+        """Test format_output with empty content list raises ValueError."""
         output = make_output([])
-        with pytest.raises(IndexError):
+        output.stop_reason = "end_turn"
+        output.id = "msg_123"
+        with pytest.raises(EmptyLLMResponse, match="no content blocks") as exc_info:
             caller.format_output(output)
 
-    def test_none_content_raises(self, caller):
-        """Test format_output with None content raises UnboundLocalError."""
-        output = SimpleNamespace(content=None)
-        with pytest.raises(UnboundLocalError):
+        err = exc_info.value
+        assert type(err) is EmptyLLMResponse
+        assert err.retryable is True
+        assert err.metadata == {
+            "provider": "anthropic",
+            "model": DEFAULT_CLAUDE_MODEL,
+            "response_id": "msg_123",
+            "stop_reason": "end_turn",
+            "block_types": [],
+            "usage": {"input_tokens": 10, "output_tokens": 10},
+            "retryable": True,
+        }
+
+    def test_empty_content_refusal_raises_content_filtered(self, caller):
+        """Test an empty response with stop_reason 'refusal' is not retryable."""
+        output = make_output([])
+        output.stop_reason = "refusal"
+        with pytest.raises(LLMContentFiltered) as exc_info:
             caller.format_output(output)
+        assert exc_info.value.retryable is False
+
+    def test_none_content_raises(self, caller):
+        """Test format_output with None content raises ValueError."""
+        output = SimpleNamespace(content=None)
+        with pytest.raises(EmptyLLMResponse, match="no content blocks"):
+            caller.format_output(output)
+
+    @pytest.mark.parametrize("text", ["", " \n"], ids=["empty_str", "whitespace"])
+    @pytest.mark.parametrize(
+        "stop_reason, retryable", [("end_turn", True), ("max_tokens", False)]
+    )
+    def test_blank_text_raises(self, caller, text, stop_reason, retryable):
+        """Test a response whose text blocks are blank raises EmptyLLMResponse."""
+        output = make_output([make_text_block(text)])
+        output.stop_reason = stop_reason
+        with pytest.raises(EmptyLLMResponse, match="no text or tool calls") as exc_info:
+            caller.format_output(output)
+
+        err = exc_info.value
+        assert type(err) is EmptyLLMResponse
+        assert err.retryable is retryable
+        assert err.stop_reason == stop_reason
+        assert err.block_types == ["text"]
+
+    def test_thinking_only_content_raises(self, caller):
+        """Test a thinking-only response that hit max_tokens is not retryable."""
+        thinking = BetaThinkingBlock(type="thinking", thinking="Hmm...", signature="sig")
+        output = make_output([thinking])
+        output.stop_reason = "max_tokens"
+        with pytest.raises(
+            EmptyLLMResponse, match="only a thinking block was returned"
+        ) as exc_info:
+            caller.format_output(output)
+
+        err = exc_info.value
+        assert err.retryable is False
+        assert err.stop_reason == "max_tokens"
+        assert err.block_types == ["thinking"]
+        # metadata and message never carry generated text
+        assert "Hmm..." not in str(err)
+
+    # ===== Response Model Name Validation Tests =====
+
+    @pytest.mark.parametrize(
+        "match_type",
+        ["match", "response_model_suffix", "api_model_suffix", "mismatch"],
+    )
+    @pytest.mark.parametrize(
+        "response_validation_mode",
+        [
+            ResponseValidationMode.STRICT,
+            ResponseValidationMode.ALLOW_PARTIAL,
+            ResponseValidationMode.ALLOW_ALL,
+        ],
+    )
+    def test_response_model_validation(self, caller, match_type, response_validation_mode):
+        """Test response model validation modes against different possible mismatches"""
+        caller.response_model_validation_mode = response_validation_mode
+        output = make_output([make_text_block("Hello")])
+        api_model_name = caller._parse_model_name_string(caller.Model.Api_Model_Name)
+        if match_type == "match":
+            output.model = api_model_name
+        elif match_type == "response_model_suffix":
+            output.model = f"{api_model_name}_suffix"
+        elif match_type == "api_model_suffix":
+            output.model = api_model_name[:-2]
+        elif match_type == "mismatch":
+            output.model = api_model_name[:-2][2:]
+
+        formatted_output = caller.format_output(output)
+        assert isinstance(formatted_output, LLMMessage)
+
+        if (
+            response_validation_mode == ResponseValidationMode.ALLOW_ALL
+            or match_type == "match"
+            or (
+                response_validation_mode == ResponseValidationMode.ALLOW_PARTIAL
+                and match_type in ("response_model_suffix", "api_model_suffix")
+            )
+        ):
+            caller._validate_response_model(formatted_output)
+            return
+        else:
+            try:
+                caller._validate_response_model(formatted_output)
+                raise ValueError()
+            except LLMResponseModelNameMismatch as err:
+                assert err.retryable is False
+            except Exception:
+                raise
+
 
 
 # ============================================================================
@@ -636,6 +744,84 @@ class TestTokenCounting:
 
         assert count == 150
         caller.Client.beta.messages.count_tokens.assert_called_once()
+
+
+# ============================================================================
+# Streaming Tests
+# ============================================================================
+
+class FakeStream:
+    """Fake stream: yields events, final message lacks usage details."""
+
+    def __init__(self, events, final):
+        self.events = events
+        self.final = final
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        return iter(self.events)
+
+    def get_final_message(self):
+        return self.final
+
+
+class FakeAsyncStream(FakeStream):
+    """Async version of FakeStream."""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def __aiter__(self):
+        for event in self.events:
+            yield event
+
+    async def get_final_message(self):
+        return self.final
+
+
+def make_stream_events():
+    """Stream events whose message_delta carries the thinking-token count."""
+    return [
+        SimpleNamespace(type="message_start"),
+        SimpleNamespace(
+            type="message_delta",
+            usage=Usage(
+                input_tokens=10,
+                output_tokens=30,
+                output_tokens_details={"thinking_tokens": 20},
+            ),
+        ),
+    ]
+
+
+class TestStreamingThinkingTokens:
+    """Streaming caller recovers output_tokens_details from message_delta."""
+
+    def test_sync_merges_thinking_tokens(self):
+        final = make_output([make_text_block("Answer")], output_tokens=30)
+        caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
+        caller.Func = lambda *a, **k: FakeStream(make_stream_events(), final)
+
+        out, _ = caller._call()
+
+        assert caller.format_output(out).TokensUsedReasoning == 20
+
+    def test_async_merges_thinking_tokens(self):
+        final = make_output([make_text_block("Answer")], output_tokens=30)
+        caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
+        caller.AFunc = lambda *a, **k: FakeAsyncStream(make_stream_events(), final)
+
+        out, _ = asyncio.run(caller._acall())
+
+        assert caller.format_output(out).TokensUsedReasoning == 20
 
 
 # ============================================================================

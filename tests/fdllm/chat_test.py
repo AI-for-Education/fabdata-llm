@@ -1,23 +1,13 @@
 import pytest
 from unittest.mock import patch
 from typing import List
-from pathlib import Path
 
 from pydantic import PrivateAttr
-from dotenv import load_dotenv
 
 from fdllm.chat import ChatController, ChatPlugin
 from fdllm import OpenAICaller, ClaudeCaller, GoogleGenAICaller
 from fdllm.llmtypes import LLMMessage
-from fdllm.sysutils import register_models
 from fdllm.constants import LLM_DEFAULT_MAX_TOKENS
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
-
-register_models(TEST_ROOT / "custom_models_test.yaml")
 
 TEST_PLUGIN_SYSMSG = {0: "A", -1: "B", -2: "C"}
 

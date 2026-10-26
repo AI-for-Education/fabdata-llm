@@ -4,20 +4,10 @@ Tests are parametrized to run across OpenAI, Anthropic, and Google callers.
 """
 import pytest
 import base64
-from pathlib import Path
 from PIL import Image
-
-from dotenv import load_dotenv
 
 from fdllm import OpenAICaller, ClaudeCaller, GoogleGenAICaller
 from fdllm.llmtypes import LLMMessage, LLMDocument, LLMImage
-from fdllm.sysutils import register_models
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
-register_models(TEST_ROOT / "custom_models_test.yaml")
 
 # Sample PDF bytes (minimal valid PDF structure for testing)
 MINIMAL_PDF = b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF"

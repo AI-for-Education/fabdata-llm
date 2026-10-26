@@ -2,27 +2,25 @@
 Tests for OpenAI caller including chat completions and legacy completions API.
 Tests cover basic functionality, tools, images, special models, and metadata handling.
 """
+
 import pytest
 import json
 from types import SimpleNamespace, GeneratorType
-from pathlib import Path
 from unittest.mock import patch
 from PIL import Image
 
-from dotenv import load_dotenv
-
 from fdllm import OpenAICaller
 from fdllm.openai.caller import OpenAICompletionsCaller
-from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage
+from fdllm.errors import (
+    EmptyLLMResponse,
+    LLMContentFiltered,
+    LLMResponseModelNameMismatch,
+)
+from fdllm.llmtypes import LLMMessage, LLMToolCall, LLMImage, ResponseValidationMode
 from fdllm.openai.tokenizer import tokenize_chatgpt_messages
 from fdllm.tooluse import Tool, ToolParam
-from fdllm.sysutils import register_models
 
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE.parent
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
-
+DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 MESSAGE_ROLES = ("user", "system", "assistant", "error")
 TEST_MESSAGE_TEXT = "This is a test"
 TEST_MESSAGE = {
@@ -31,18 +29,15 @@ TEST_MESSAGE = {
 }
 TEST_MESSAGE_LIST = [TEST_MESSAGE[role] for role in ("system", "user", "assistant")]
 TEST_RESULT_OPENAI = SimpleNamespace(
-    choices=[SimpleNamespace(
-        message=SimpleNamespace(content=TEST_MESSAGE_TEXT)
-    )]
+    choices=[SimpleNamespace(message=SimpleNamespace(content=TEST_MESSAGE_TEXT))],
+    model=DEFAULT_OPENAI_MODEL,
 )
-DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 TEST_MODELS = ["gpt-4.1-mini"]
 TEST_VISION_MODELS = ["gpt-4.1"]
 
-register_models(TEST_ROOT / "custom_models_test.yaml")
-
 
 # ===== Basic OpenAICaller Tests =====
+
 
 @pytest.mark.parametrize("model", TEST_MODELS)
 def test_init_openai(model):
@@ -91,13 +86,21 @@ def test_tokenize_openai():
 
 # ===== Tool Handling Tests =====
 
+
 def test_format_message_tool_role():
     """Test formatting of messages with tool role"""
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     tool_calls = [
-        LLMToolCall(ID="call_123", Name="get_weather", Args={"city": "NYC"}, Response='{"temp": 72}'),
-        LLMToolCall(ID="call_456", Name="get_time", Args={}, Response='{"time": "12:00"}'),
+        LLMToolCall(
+            ID="call_123",
+            Name="get_weather",
+            Args={"city": "NYC"},
+            Response='{"temp": 72}',
+        ),
+        LLMToolCall(
+            ID="call_456", Name="get_time", Args={}, Response='{"time": "12:00"}'
+        ),
     ]
 
     message = LLMMessage(Role="tool", ToolCalls=tool_calls)
@@ -136,12 +139,9 @@ def test_format_message_assistant_tool_calls():
             {
                 "id": "call_789",
                 "type": "function",
-                "function": {
-                    "arguments": "{'query': 'test'}",
-                    "name": "search"
-                }
+                "function": {"arguments": "{'query': 'test'}", "name": "search"},
             }
-        ]
+        ],
     }
 
 
@@ -154,7 +154,9 @@ def test_format_tool():
         name = "test_tool"
         description = "A test tool"
         params = {
-            "param1": ToolParam(type="string", description="First param", required=True),
+            "param1": ToolParam(
+                type="string", description="First param", required=True
+            ),
             "param2": ToolParam(type="integer", description="Second param", default=42),
         }
 
@@ -209,15 +211,18 @@ def test_format_messagelist_with_tool_messages():
 
 # ===== Image Handling Tests =====
 
+
 def test_format_message_with_images():
     """Test formatting of user messages with images"""
     caller = OpenAICaller(model="gpt-4.1")  # Vision model
 
     # Create a simple test image
-    img = Image.new('RGB', (10, 10), color='red')
+    img = Image.new("RGB", (10, 10), color="red")
     llm_image = LLMImage(Img=img, Detail="high")
 
-    message = LLMMessage(Role="user", Message="What's in this image?", Images=[llm_image])
+    message = LLMMessage(
+        Role="user", Message="What's in this image?", Images=[llm_image]
+    )
     result = caller.format_message(message)
 
     assert result["role"] == "user"
@@ -245,7 +250,7 @@ def test_format_message_images_non_vision_model():
     caller = OpenAICaller(model="gpt-4.1-mini")
     caller.Model.Vision = False  # Force non-vision behavior
 
-    img = Image.new('RGB', (10, 10))
+    img = Image.new("RGB", (10, 10))
     llm_image = LLMImage(Img=img)
     message = LLMMessage(Role="user", Message="test", Images=[llm_image])
 
@@ -257,12 +262,10 @@ def test_tokenize_with_vision():
     """Test tokenization for vision models with images"""
     caller = OpenAICaller(model="gpt-4.1")  # Vision model
 
-    img = Image.new('RGB', (100, 100))
+    img = Image.new("RGB", (100, 100))
     llm_image = LLMImage(Img=img, Detail="low")
 
-    messages = [
-        LLMMessage(Role="user", Message="What's this?", Images=[llm_image])
-    ]
+    messages = [LLMMessage(Role="user", Message="What's this?", Images=[llm_image])]
 
     tokens = caller.tokenize(messages)
 
@@ -274,11 +277,15 @@ def test_tokenize_with_vision():
 
 # ===== Special Model Handling Tests =====
 
-@pytest.mark.parametrize("model_name", [
-    "o1-2024",
-    "o1",
-    "o3-mini",
-])
+
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "o1-2024",
+        "o1",
+        "o3-mini",
+    ],
+)
 def test_format_message_reasoning_models_system_to_developer(model_name):
     """Test o1/o3 reasoning models convert system role to developer"""
     caller = OpenAICaller(model="gpt-4.1-mini")
@@ -293,21 +300,24 @@ def test_format_message_reasoning_models_system_to_developer(model_name):
 
 # ===== Token Usage & Metadata Tests =====
 
+
 def test_format_output_with_usage_and_reasoning_tokens():
     """Test format_output with reasoning tokens"""
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     # Mock output with reasoning tokens
     output = SimpleNamespace(
-        choices=[SimpleNamespace(
-            message=SimpleNamespace(content="Test response"),
-            logprobs={"token_logprobs": [0.1, 0.2]}
-        )],
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="Test response"),
+                logprobs={"token_logprobs": [0.1, 0.2]},
+            )
+        ],
         usage=SimpleNamespace(
             total_tokens=100,
             completion_tokens=50,
-            completion_tokens_details=SimpleNamespace(reasoning_tokens=20)
-        )
+            completion_tokens_details=SimpleNamespace(reasoning_tokens=20),
+        ),
     )
 
     result = caller.format_output(output, latency=1.5)
@@ -326,15 +336,14 @@ def test_format_output_without_reasoning_tokens():
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     output = SimpleNamespace(
-        choices=[SimpleNamespace(
-            message=SimpleNamespace(content="Test"),
-            logprobs=None
-        )],
+        choices=[
+            SimpleNamespace(message=SimpleNamespace(content="Test"), logprobs=None)
+        ],
         usage=SimpleNamespace(
             total_tokens=50,
             completion_tokens=25,
             # No completion_tokens_details
-        )
+        ),
     )
 
     result = caller.format_output(output)
@@ -347,26 +356,25 @@ def test_format_output_with_tool_calls():
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     output = SimpleNamespace(
-        choices=[SimpleNamespace(
-            message=SimpleNamespace(
-                content=None,
-                tool_calls=[
-                    SimpleNamespace(
-                        id="call_abc",
-                        function=SimpleNamespace(
-                            name="get_data",
-                            arguments='{"param": "value"}'
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=None,
+                    tool_calls=[
+                        SimpleNamespace(
+                            id="call_abc",
+                            function=SimpleNamespace(
+                                name="get_data", arguments='{"param": "value"}'
+                            ),
                         )
-                    )
-                ]
-            ),
-            logprobs=None
-        )],
+                    ],
+                ),
+                logprobs=None,
+            )
+        ],
         usage=SimpleNamespace(
-            total_tokens=75,
-            completion_tokens=25,
-            completion_tokens_details=None
-        )
+            total_tokens=75, completion_tokens=25, completion_tokens_details=None
+        ),
     )
 
     result = caller.format_output(output, latency=2.0)
@@ -381,21 +389,157 @@ def test_format_output_with_tool_calls():
     assert result.Latency == 2.0
 
 
+def test_format_output_with_whitespace_and_tool_call():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    output = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=" \n",
+                    tool_calls=[
+                        SimpleNamespace(
+                            id="call_abc",
+                            function=SimpleNamespace(
+                                name="get_data", arguments='{"param": "value"}'
+                            ),
+                        )
+                    ],
+                ),
+                logprobs=None,
+            )
+        ],
+        usage=None,
+    )
+
+    result = caller.format_output(output)
+
+    assert result.ToolCalls == [
+        LLMToolCall(ID="call_abc", Name="get_data", Args={"param": "value"})
+    ]
+
+
 def test_format_output_invalid():
     """Test format_output with invalid output"""
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
 
     # Output with neither content nor tool_calls
     output = SimpleNamespace(
-        choices=[SimpleNamespace(
-            message=SimpleNamespace(content=None, tool_calls=None),
-            logprobs=None
-        )],
-        usage=SimpleNamespace(total_tokens=10, completion_tokens=5)
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=None, tool_calls=None), logprobs=None
+            )
+        ],
+        usage=SimpleNamespace(total_tokens=10, completion_tokens=5),
     )
 
     with pytest.raises(ValueError, match="Output must be either content or tool call"):
         caller.format_output(output)
+
+
+@pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])
+def test_format_output_no_choices(choices):
+    """Test format_output with an empty or missing choices list"""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+
+    output = SimpleNamespace(
+        choices=choices,
+        id="chatcmpl-1",
+        usage=SimpleNamespace(total_tokens=10, completion_tokens=0),
+    )
+
+    with pytest.raises(EmptyLLMResponse, match="no choices") as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert err.retryable is True
+    assert err.metadata == {
+        "provider": "openai",
+        "model": DEFAULT_OPENAI_MODEL,
+        "response_id": "chatcmpl-1",
+        "usage": {"completion_tokens": 0, "total_tokens": 10},
+        "retryable": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "message, finish_reason, error_cls, retryable",
+    [
+        (
+            SimpleNamespace(content=None, tool_calls=None, refusal="I can't help"),
+            "stop",
+            LLMContentFiltered,
+            False,
+        ),
+        (
+            SimpleNamespace(content=None, tool_calls=None),
+            "content_filter",
+            LLMContentFiltered,
+            False,
+        ),
+        (
+            SimpleNamespace(content=None, tool_calls=None),
+            "length",
+            EmptyLLMResponse,
+            False,
+        ),
+    ],
+    ids=["refusal", "content_filter", "length"],
+)
+def test_format_output_empty_message_classification(
+    message, finish_reason, error_cls, retryable
+):
+    """Test empty messages are classified by refusal / finish_reason"""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+
+    output = SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=message, logprobs=None, finish_reason=finish_reason)
+        ],
+        usage=None,
+    )
+
+    with pytest.raises(error_cls) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is error_cls
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
+    # the refusal text is model output and must not leak into logs
+    assert "I can't help" not in str(err)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        SimpleNamespace(content="", tool_calls=None),
+        SimpleNamespace(content=" \n", tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=None),
+        SimpleNamespace(content=None, tool_calls=[]),
+    ],
+    ids=["empty_str", "whitespace", "none", "empty_tool_calls"],
+)
+@pytest.mark.parametrize(
+    "finish_reason, retryable", [("stop", True), ("length", False)]
+)
+def test_format_output_empty_message(message, finish_reason, retryable):
+    """Test blank content / empty tool_calls raise instead of returning a message"""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+
+    output = SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=message, logprobs=None, finish_reason=finish_reason)
+        ],
+        usage=None,
+    )
+
+    with pytest.raises(EmptyLLMResponse) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
 
 
 def test_format_output_generator():
@@ -411,7 +555,60 @@ def test_format_output_generator():
     assert isinstance(result, GeneratorType)
 
 
+# ===== Response Model Name Validation Tests =====
+
+@pytest.mark.parametrize(
+    "match_type",
+    ["match", "response_model_suffix", "api_model_suffix", "mismatch"],
+)
+@pytest.mark.parametrize(
+    "response_validation_mode",
+    [
+        ResponseValidationMode.STRICT,
+        ResponseValidationMode.ALLOW_PARTIAL,
+        ResponseValidationMode.ALLOW_ALL,
+    ],
+)
+def test_response_model_validation(match_type, response_validation_mode):
+    """Test response model validation modes against different possible mismatches"""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    caller.response_model_validation_mode = response_validation_mode
+    output = TEST_RESULT_OPENAI
+    api_model_name = caller._parse_model_name_string(caller.Model.Api_Model_Name)
+    if match_type == "match":
+        output.model = api_model_name
+    elif match_type == "response_model_suffix":
+        output.model = f"{api_model_name}_suffix"
+    elif match_type == "api_model_suffix":
+        output.model = api_model_name[:-2]
+    elif match_type == "mismatch":
+        output.model = api_model_name[:-2][2:]
+
+    formatted_output = caller.format_output(output)
+    assert isinstance(formatted_output, LLMMessage)
+
+    if (
+        response_validation_mode == ResponseValidationMode.ALLOW_ALL
+        or match_type == "match"
+        or (
+            response_validation_mode == ResponseValidationMode.ALLOW_PARTIAL
+            and match_type in ("response_model_suffix", "api_model_suffix")
+        )
+    ):
+        caller._validate_response_model(formatted_output)
+        return
+    else:
+        try:
+            caller._validate_response_model(formatted_output)
+            raise ValueError()
+        except LLMResponseModelNameMismatch as err:
+            assert err.retryable is False
+        except Exception:
+            raise
+
+
 # ===== _proc_call_args Tests =====
+
 
 def test_proc_call_args_with_response_schema():
     """Test _proc_call_args with response_schema"""
@@ -424,7 +621,7 @@ def test_proc_call_args_with_response_schema():
     messages = [LLMMessage(Role="user", Message="test")]
 
     # Mock the type_to_response_format_param function
-    with patch('fdllm.openai.caller.type_to_response_format_param') as mock_convert:
+    with patch("fdllm.openai.caller.type_to_response_format_param") as mock_convert:
         mock_convert.return_value = {"type": "json_schema", "json_schema": {}}
 
         kwargs = caller._proc_call_args(messages, 100, ResponseSchema)
@@ -441,8 +638,7 @@ def test_proc_call_args_extra_body_merge():
     messages = [LLMMessage(Role="user", Message="test")]
 
     kwargs = caller._proc_call_args(
-        messages, 100, None,
-        extra_body={"custom_key": "custom_value"}
+        messages, 100, None, extra_body={"custom_key": "custom_value"}
     )
 
     assert "extra_body" in kwargs
@@ -464,11 +660,12 @@ def test_proc_call_args_extra_body_default():
 
 # ===== OpenAICompletionsCaller Tests =====
 
+
 def test_completions_caller_init():
     """Test OpenAICompletionsCaller initialization"""
     # This will test with a mock completions model
-    with patch('fdllm.openai.caller.OpenAI'):
-        with patch('fdllm.openai.caller.AsyncOpenAI'):
+    with patch("fdllm.openai.caller.OpenAI"):
+        with patch("fdllm.openai.caller.AsyncOpenAI"):
             # We need to register a completions model
             caller = OpenAICompletionsCaller(model="text-davinci-003")
 
@@ -506,7 +703,7 @@ def test_completions_format_message_user_with_images():
     """Test completions format_message rejects images"""
     caller = OpenAICompletionsCaller(model="text-davinci-003")
 
-    img = Image.new('RGB', (10, 10))
+    img = Image.new("RGB", (10, 10))
     llm_image = LLMImage(Img=img)
     message = LLMMessage(Role="user", Message="test", Images=[llm_image])
 
@@ -523,7 +720,9 @@ def test_completions_format_message_assistant_with_tool_calls():
         LLMToolCall(ID="2", Name="tool2", Args={"y": 2}),
     ]
 
-    message = LLMMessage(Role="assistant", ToolCalls=tool_calls, Message="Calling tools")
+    message = LLMMessage(
+        Role="assistant", ToolCalls=tool_calls, Message="Calling tools"
+    )
     result = caller.format_message(message)
 
     assert "Calling tools" in result
@@ -540,7 +739,7 @@ def test_completions_format_message_assistant_tool_calls_no_message():
 
     result = caller.format_message(message)
 
-    assert result == 'tool({})\n'
+    assert result == "tool({})\n"
 
 
 def test_completions_format_message_assistant_no_tool_calls():
@@ -607,9 +806,7 @@ def test_completions_format_output():
     """Test completions format_output"""
     caller = OpenAICompletionsCaller(model="text-davinci-003")
 
-    output = SimpleNamespace(
-        choices=[SimpleNamespace(text="Completion result")]
-    )
+    output = SimpleNamespace(choices=[SimpleNamespace(text="Completion result")])
 
     result = caller.format_output(output, latency=1.0)
 
@@ -619,24 +816,46 @@ def test_completions_format_output():
     assert result.Latency == 1.0
 
 
-def test_completions_format_output_invalid():
-    """Test completions format_output with invalid response"""
+@pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])
+def test_completions_format_output_no_choices(choices):
+    """Test completions format_output with an empty or missing choices list"""
     caller = OpenAICompletionsCaller(model="text-davinci-003")
 
-    # Missing choices
-    output = SimpleNamespace(choices=[])
+    output = SimpleNamespace(choices=choices)
 
-    with pytest.raises(ValueError, match="Invalid completions API response"):
+    with pytest.raises(EmptyLLMResponse, match="no choices") as exc_info:
         caller.format_output(output)
+    assert exc_info.value.retryable is True
+
+
+@pytest.mark.parametrize(
+    "text", ["", " \n", None], ids=["empty_str", "whitespace", "none"]
+)
+@pytest.mark.parametrize(
+    "finish_reason, retryable", [("stop", True), ("length", False)]
+)
+def test_completions_format_output_empty_text(text, finish_reason, retryable):
+    """Test completions format_output raises on blank text"""
+    caller = OpenAICompletionsCaller(model="text-davinci-003")
+
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(text=text, finish_reason=finish_reason)]
+    )
+
+    with pytest.raises(EmptyLLMResponse) as exc_info:
+        caller.format_output(output)
+
+    err = exc_info.value
+    assert type(err) is EmptyLLMResponse
+    assert err.retryable is retryable
+    assert err.stop_reason == finish_reason
 
 
 def test_completions_format_output_no_text():
     """Test completions format_output without text attribute"""
     caller = OpenAICompletionsCaller(model="text-davinci-003")
 
-    output = SimpleNamespace(
-        choices=[SimpleNamespace(message="wrong")]
-    )
+    output = SimpleNamespace(choices=[SimpleNamespace(message="wrong")])
 
     with pytest.raises(ValueError, match="Unexpected completions API response format"):
         caller.format_output(output)
@@ -675,9 +894,7 @@ def test_completions_proc_call_args_removes_tools():
     messages = [LLMMessage(Role="user", Message="test")]
 
     kwargs = caller._proc_call_args(
-        messages, 100, None,
-        tools=["tool1"],
-        tool_choice="auto"
+        messages, 100, None, tools=["tool1"], tool_choice="auto"
     )
 
     assert "tools" not in kwargs

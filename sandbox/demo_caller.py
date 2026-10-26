@@ -12,17 +12,18 @@ from fdllm.sysutils import register_models, list_models
 register_models(Path.home() / ".fdllm/custom_models.yaml")
 print(list_models())
 #%%
-caller_GPT = get_caller("gpt-4-0613")
-caller_claude = get_caller("claude-2.1")
-caller_mistral = get_caller("fabdata-ai-devel-francecentral-Mistral-large")
-caller_gemini = get_caller("gemini-1.5-pro-001")
+caller_GPT = get_caller("gpt-4.1-mini")
+caller_claude = get_caller("claude-sonnet-4-5-20250929")
+# caller_mistral = get_caller("fabdata-ai-devel-francecentral-Mistral-large")
+caller_gemini = get_caller("gemini-3.5-flash")
 
 #%%
 msg = LLMMessage(Role="user", Message="Hi there")
 
 # %%
 print(caller_gemini.call(msg))
-
+caller_gemini.response_model_validation_mode = True
+print(caller_gemini.call(msg))
 #%%
 print(caller_GPT.call(msg))
 
@@ -30,7 +31,7 @@ print(caller_GPT.call(msg))
 print(caller_claude.call(msg))
 
 #%%
-print(caller_mistral.call(msg))
+# print(caller_mistral.call(msg))
 
 #%%
 chat = ChatController(Caller=caller_mistral)
