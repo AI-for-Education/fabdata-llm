@@ -229,14 +229,16 @@ class GoogleGenAICaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
+            # get the model used for response
+            response_model = self._parse_model_name_string(getattr(output, "model_version", None))
             ## token counts
             usage_metadata = getattr(output, "usage_metadata", None)
             if usage_metadata is not None:
-                token_count_kwargs = dict(
-                    TokensUsed=usage_metadata.total_token_count,
-                    TokensUsedCompletion=usage_metadata.candidates_token_count,
-                    TokensUsedReasoning=usage_metadata.thoughts_token_count,
-                )
+                token_count_kwargs = {
+                    "TokensUsed": usage_metadata.total_token_count,
+                    "TokensUsedCompletion": usage_metadata.candidates_token_count,
+                    "TokensUsedReasoning": usage_metadata.thoughts_token_count,
+                }
             else:
                 token_count_kwargs = {}
             #####
@@ -298,6 +300,7 @@ class GoogleGenAICaller(LLMCaller):
                     Message=text,
                     LogProbs=logprobs,
                     Latency=latency,
+                    ResponseModel=response_model,
                     **token_count_kwargs,
                 )
                 return ensure_nonempty(out, **error_meta)
@@ -316,6 +319,7 @@ class GoogleGenAICaller(LLMCaller):
                     ToolCalls=tcs,
                     LogProbs=logprobs,
                     Latency=latency,
+                    ResponseModel=response_model,
                     **token_count_kwargs,
                 )
                 return ensure_nonempty(out, **error_meta)

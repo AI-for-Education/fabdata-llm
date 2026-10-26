@@ -167,7 +167,10 @@ class OpenAICaller(LLMCaller):
         response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
-        return _gpt_common_fmt_output(output, latency, model=self.Model.Name)
+        out = _gpt_common_fmt_output(output, latency, model=self.Model.Name)
+        if isinstance(out, LLMMessage):
+            out.ResponseModel = self._parse_model_name_string(out.ResponseModel)
+        return out
 
     def tokenize(self, messagelist: List[LLMMessage]):
         if self.Model.Vision:
@@ -219,6 +222,8 @@ def _gpt_common_fmt_output(output, latency, model=None):
     if isinstance(output, GeneratorType):
         return output
     else:
+        # get the model used for response
+        response_model = getattr(output, "model", None)
         usage = getattr(output, "usage",  None)
         if usage is None:
             token_count_kwargs = {}
@@ -253,6 +258,7 @@ def _gpt_common_fmt_output(output, latency, model=None):
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
+                ResponseModel=response_model,
             )
             return ensure_nonempty(out, **error_meta)
         elif msg.tool_calls:
@@ -270,6 +276,7 @@ def _gpt_common_fmt_output(output, latency, model=None):
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
+                ResponseModel=response_model,
             )
             return ensure_nonempty(out, **error_meta)
         elif getattr(msg, "refusal", None):

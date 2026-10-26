@@ -1,69 +1,61 @@
 from __future__ import annotations
-from typing import (
-    List,
-    Literal,
-    Callable,
-    Awaitable,
-    Any,
-    Optional,
-    Dict,
-    Union,
-    Type,
-    ClassVar,
-)
-import time
+
+import base64
 import datetime
 import logging
-from abc import ABC, abstractmethod
 import os
-from dataclasses import field
-from functools import wraps
-from pathlib import Path
-from io import BytesIO
+import time
+from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from copy import copy
-import base64
-import json
+from enum import Enum
+from io import BytesIO
+from pathlib import Path
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+)
 
 import numpy as np
-from openai import RateLimitError as RateLimitErrorOpenAI, APIConnectionError
 from anthropic import RateLimitError as RateLimitErrorAnthropic
 from google.genai.errors import ServerError
-from pydantic.dataclasses import dataclass
-from pydantic import ConfigDict, BaseModel, Field, field_validator
+from openai import APIConnectionError
+from openai import RateLimitError as RateLimitErrorOpenAI
 from PIL import Image, ImageFile
-
-from .decorators import delayedretry
-from .logging_utils import get_logger, log_call_start, log_call_completion
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.dataclasses import dataclass
 
 # Tenacity imports for superior retry functionality
 from tenacity import (
+    AsyncRetrying,
+    Retrying,
+    after_log,
+    before_log,
+    before_sleep_log,
+    retry_if_exception,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    retry_if_exception,
-    before_log,
-    after_log,
-    before_sleep_log,
-    Retrying,
-    AsyncRetrying,
 )
-from .openai.tokenizer import tokenize_chatgpt_messages
-from .errors import is_retryable_response_error
+
 from .constants import (
-    LLM_DEFAULT_MAX_TOKENS,
     LLM_DEFAULT_MAX_RETRIES,
+    LLM_DEFAULT_MAX_TOKENS,
 )
-from .sysutils import load_models, deepmerge_dicts, get_google_token
+from .errors import LLMResponseModelNameMismatch, is_retryable_response_error
+from .logging_utils import get_logger, log_call_completion, log_call_start
+from .sysutils import deepmerge_dicts, get_google_token, load_models
 
 
 class LLMModelType(BaseModel):
-    Name: Optional[str]  # why is name optional?
+    Name: str | None  # why is name optional?
     Api_Interface: str
-    Api_Key_Env_Var: Optional[str] = None
-    Api_Model_Name: Optional[str] = None
+    Api_Key_Env_Var: str | None = None
+    Api_Model_Name: str | None = None
     Max_Token_Arg_Name: str = "max_completion_tokens"
     Token_Window: int
-    Token_Limit_Completion: Optional[int] = None
+    Token_Limit_Completion: int | None = None
     Client_Args: dict = Field(default_factory=dict)
     Call_Args: dict = Field(default_factory=dict)
     Extra_Body: dict = Field(default_factory=dict)
@@ -94,7 +86,7 @@ class LLMModelType(BaseModel):
         self._set_api_key_from_env()
 
     @classmethod
-    def model_types(cls) -> Dict[str, Type["LLMModelType"]]:
+    def model_types(cls) -> dict[str, type[LLMModelType]]:
         return {
             "OpenAI": OpenAIModelType,
             "OpenAICompletions": OpenAICompletionsModelType,
@@ -153,8 +145,10 @@ class AzureMistralAIModelType(LLMModelType):
 class AnthropicModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
 
+
 class AnthropicStreamingModelType(LLMModelType):
     Api_Key_Env_Var: str = "ANTHROPIC_API_KEY"
+
 
 class BedrockModelType(LLMModelType):
     Api_Key_Env_Var: str = "AWS_API_KEYS"
@@ -180,15 +174,16 @@ class GoogeGenAIModelType(LLMModelType):
 
 class LLMMessage(BaseModel):
     Role: Literal["user", "assistant", "system", "tool", "error"]
-    Message: Optional[str] = None
-    Images: Optional[List[LLMImage]] = None
-    Documents: Optional[List[LLMDocument]] = None
-    ToolCalls: Optional[List[LLMToolCall]] = None
-    TokensUsed: Optional[int] = None
-    TokensUsedCompletion: Optional[int] = None
-    TokensUsedReasoning: Optional[int] = None
-    LogProbs: Optional[Any] = None
-    Latency: Optional[float] = None
+    Message: str | None = None
+    Images: list[LLMImage] | None = None
+    Documents: list[LLMDocument] | None = None
+    ToolCalls: list[LLMToolCall] | None = None
+    TokensUsed: int | None = None
+    TokensUsedCompletion: int | None = None
+    TokensUsedReasoning: int | None = None
+    LogProbs: Any | None = None
+    Latency: float | None = None
+    ResponseModel: str | None = None
     DateUTC: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     @field_validator("ToolCalls")
@@ -213,15 +208,15 @@ class LLMMessage(BaseModel):
 
 
 class LLMToolCall(BaseModel):
-    ID: Optional[str]
+    ID: str | None
     Name: str
     Args: dict = Field(default_factory=dict)
-    Response: Optional[str] = None
+    Response: str | None = None
 
 
 class LLMImage(BaseModel):
-    Url: Optional[str] = None
-    Img: Optional[Union[Image.Image, Path]] = None
+    Url: str | None = None
+    Img: Image.Image | Path | None = None
     Detail: Literal["low", "high"] = "low"
 
     def __init__(self, *args, **kwargs):
@@ -230,7 +225,7 @@ class LLMImage(BaseModel):
 
     @classmethod
     def list_from_images(
-        cls, images: Optional[List[Image.Image]], detail: Literal["low", "high"] = "low"
+        cls, images: list[Image.Image] | None, detail: Literal["low", "high"] = "low"
     ):
         if images is None:
             return
@@ -290,9 +285,9 @@ class LLMImage(BaseModel):
 
 
 class LLMDocument(BaseModel):
-    Path_: Optional[Path] = Field(None, alias="Path")
-    Data: Optional[bytes] = None
-    Filename: Optional[str] = None
+    Path_: Path | None = Field(None, alias="Path")
+    Data: bytes | None = None
+    Filename: str | None = None
 
     model_config = {"arbitrary_types_allowed": True, "populate_by_name": True}
 
@@ -318,9 +313,7 @@ class LLMDocument(BaseModel):
         return self.Filename or "document.pdf"
 
     @classmethod
-    def list_from_paths(
-        cls, paths: Optional[List[Path]]
-    ) -> Optional[List["LLMDocument"]]:
+    def list_from_paths(cls, paths: list[Path] | None) -> list[LLMDocument] | None:
         """Convenience method to create documents from a list of paths."""
         if paths is None:
             return None
@@ -332,7 +325,13 @@ class LLMCallArgNames:
     Messages: str
     Model: str
     Max_Tokens: str
-    Response_Schema: Optional[str] = None
+    Response_Schema: str | None = None
+
+
+class ResponseValidationMode(str, Enum):
+    STRICT = "strict"
+    ALLOW_PARTIAL = "allow_partial"
+    ALLOW_ALL = "allow_all"
 
 
 class LLMCaller(ABC, BaseModel):
@@ -340,10 +339,12 @@ class LLMCaller(ABC, BaseModel):
     Func: Callable[..., Any]
     AFunc: Callable[..., Awaitable[Any]]
     Token_Window: int
-    Token_Limit_Completion: Optional[int] = None
-    Defaults: Dict = Field(default_factory=dict)
-    Arg_Names: Optional[LLMCallArgNames] = None
-
+    Token_Limit_Completion: int | None = None
+    Defaults: dict = Field(default_factory=dict)
+    Arg_Names: LLMCallArgNames | None = None
+    response_model_validation_mode: ResponseValidationMode = (
+        ResponseValidationMode.ALLOW_ALL
+    )
     # transport errors worth re-sending the request for
     _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (
         RateLimitErrorOpenAI,
@@ -383,19 +384,19 @@ class LLMCaller(ABC, BaseModel):
         pass
 
     @abstractmethod
-    def format_messagelist(self, messagelist: List[LLMMessage]):
+    def format_messagelist(self, messagelist: list[LLMMessage]):
         pass
 
     @abstractmethod
     def format_output(
-        self, output: Any, response_schema: Optional[type[BaseModel]] = None
+        self, output: Any, response_schema: type[BaseModel] | None = None
     ) -> LLMMessage:
         pass
 
-    def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
+    def tokenize(self, messagelist: list[LLMMessage]) -> list[int]:
         pass
 
-    def count_tokens(self, messagelist: List[LLMMessage]) -> int:
+    def count_tokens(self, messagelist: list[LLMMessage]) -> int:
         return len(self.tokenize(messagelist))
 
     def format_tool(self, tool):
@@ -405,8 +406,8 @@ class LLMCaller(ABC, BaseModel):
         return [self.format_tool(tool) for tool in tools]
 
     def sanitize_messagelist(
-        self, messagelist: List[LLMMessage], min_new_token_window: int
-    ) -> List[LLMMessage]:
+        self, messagelist: list[LLMMessage], min_new_token_window: int
+    ) -> list[LLMMessage]:
         out = messagelist
         while self.Token_Window - self.count_tokens(messagelist) < min_new_token_window:
             out = out[1:]
@@ -414,24 +415,29 @@ class LLMCaller(ABC, BaseModel):
 
     def call(
         self,
-        messages: List[LLMMessage] | LLMMessage,
-        max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
-        response_schema: Optional[type[BaseModel]] = None,
+        messages: list[LLMMessage] | LLMMessage,
+        max_tokens: int | None = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: type[BaseModel] | None = None,
         **kwargs,
     ):
         # Ensure messages is a list for logging
         msg_list = messages if isinstance(messages, list) else [messages]
-        
+
         # Log call start
         start_time = log_call_start(self.logger, self.Model.Name, msg_list, "sync")
-        
+
         try:
-            kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+            kwargs = self._proc_call_args(
+                messages, max_tokens, response_schema, **kwargs
+            )
             for attempt in Retrying(**self._retry_kwargs()):
                 with attempt:
                     response, latency = self._call(**kwargs)
-                    formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
-            
+                    formatted_output = self.format_output(
+                        response, response_schema=response_schema, latency=latency
+                    )
+                    self._validate_response_model(formatted_output)
+
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)
             return formatted_output
@@ -442,24 +448,29 @@ class LLMCaller(ABC, BaseModel):
 
     async def acall(
         self,
-        messages: List[LLMMessage] | LLMMessage,
-        max_tokens: Optional[int] = LLM_DEFAULT_MAX_TOKENS,
-        response_schema: Optional[type[BaseModel]] = None,
+        messages: list[LLMMessage] | LLMMessage,
+        max_tokens: int | None = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: type[BaseModel] | None = None,
         **kwargs,
     ):
         # Ensure messages is a list for logging
         msg_list = messages if isinstance(messages, list) else [messages]
-        
+
         # Log call start
         start_time = log_call_start(self.logger, self.Model.Name, msg_list, "async")
-        
+
         try:
-            kwargs = self._proc_call_args(messages, max_tokens, response_schema, **kwargs)
+            kwargs = self._proc_call_args(
+                messages, max_tokens, response_schema, **kwargs
+            )
             async for attempt in AsyncRetrying(**self._retry_kwargs()):
                 with attempt:
                     response, latency = await self._acall(**kwargs)
-                    formatted_output = self.format_output(response, response_schema=response_schema, latency=latency)
-            
+                    formatted_output = self.format_output(
+                        response, response_schema=response_schema, latency=latency
+                    )
+                    self._validate_response_model(formatted_output)
+
             # Log successful completion
             log_call_completion(self.logger, self.Model.Name, start_time, response)
             return formatted_output
@@ -467,6 +478,63 @@ class LLMCaller(ABC, BaseModel):
             # Log failed completion
             log_call_completion(self.logger, self.Model.Name, start_time, error=e)
             raise
+
+    def _validate_response_model(self, formatted_output: LLMMessage):
+        api_model_name_parsed = self._parse_model_name_string(self.Model.Api_Model_Name)
+        if api_model_name_parsed is None:
+            raise ValueError(f"Api_Model_Name is not set for {self.Model.Name}")
+        if formatted_output.ResponseModel is None:
+            self.logger.warning(
+                "Couldn't retrieve response model name from formatted response "
+                f" for {self.Model.Name}"
+            )
+        elif formatted_output.ResponseModel != api_model_name_parsed:
+            if formatted_output.ResponseModel.startswith(api_model_name_parsed):
+                msg = (
+                    f"Response model name ({formatted_output.ResponseModel}) "
+                    "contains additional suffix to Api_Model_Name "
+                    f"({api_model_name_parsed}) for {self.Model.Name}"
+                )
+                if self.response_model_validation_mode in (
+                    ResponseValidationMode.ALLOW_PARTIAL,
+                    ResponseValidationMode.ALLOW_ALL,
+                ):
+                    self.logger.warning(msg)
+                else:
+                    raise LLMResponseModelNameMismatch(msg)
+            elif api_model_name_parsed.startswith(formatted_output.ResponseModel):
+                msg = (
+                    f"Api_Model_Name ({api_model_name_parsed}) "
+                    "contains additional suffix to Response model name "
+                    f"({formatted_output.ResponseModel}) for {self.Model.Name}"
+                )
+                if self.response_model_validation_mode in (
+                    ResponseValidationMode.ALLOW_PARTIAL,
+                    ResponseValidationMode.ALLOW_ALL,
+                ):
+                    self.logger.warning(msg)
+                else:
+                    raise LLMResponseModelNameMismatch(msg)
+            else:
+                msg = (
+                    f"Response model name ({formatted_output.ResponseModel}) "
+                    f"is different to Api_Model_Name ({api_model_name_parsed}) "
+                    f"by more than just a suffix for {self.Model.Name}"
+                )
+                if self.response_model_validation_mode in (
+                    ResponseValidationMode.STRICT,
+                    ResponseValidationMode.ALLOW_PARTIAL,
+                ):
+                    raise LLMResponseModelNameMismatch(msg)
+                else:
+                    self.logger.warning(msg)
+
+    @staticmethod
+    def _parse_model_name_string(model_name: str | None):
+        if not isinstance(model_name, str):
+            return
+        else:
+            return model_name.split("/")[-1]
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         if isinstance(messages, LLMMessage):
@@ -524,13 +592,13 @@ class LiteralCaller(LLMCaller):
     def format_message(self, message: LLMMessage):
         return super().format_message(message)
 
-    def format_messagelist(self, messagelist: List[LLMMessage]):
+    def format_messagelist(self, messagelist: list[LLMMessage]):
         return super().format_messagelist(messagelist)
 
     def format_output(self, output: Any) -> LLMMessage:
         return LLMMessage(Role="assistant", Message=output)
 
-    def tokenize(self, messagelist: List[LLMMessage]) -> List[int]:
+    def tokenize(self, messagelist: list[LLMMessage]) -> list[int]:
         return super().tokenize(messagelist)
 
 

@@ -135,6 +135,13 @@ class LLMContentFiltered(EmptyLLMResponse):
         return False
 
 
+class LLMResponseModelNameMismatch(LLMResponseError):
+    """The provider response model name does not match the api model name that was sent."""
+
+    def _default_retryable(self) -> bool:
+        return False
+
+
 def empty_response_error(message: str, **kwargs) -> EmptyLLMResponse:
     """Build an EmptyLLMResponse, or LLMContentFiltered if the stop reason says so."""
     stop_reason = _reason_str(kwargs.get("stop_reason"))
