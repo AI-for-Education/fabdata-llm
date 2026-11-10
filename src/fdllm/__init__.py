@@ -13,4 +13,6 @@ from .errors import (
     InvalidProviderResponse,
     EmptyLLMResponse,
     LLMContentFiltered,
+    LLMProviderError,
+    LLMProviderRejected,
 )

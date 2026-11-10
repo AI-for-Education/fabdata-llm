@@ -276,3 +276,34 @@ def test_call_does_not_retry_non_retryable_response(no_wait, finish_reason, erro
     with pytest.raises(error_cls):
         caller.call(LLMMessage(Role="user", Message="hi"))
     assert len(calls) == 1
+
+
+# ===== Attempt count on the final error =====
+
+
+def test_final_error_records_exhausted_budget(no_wait):
+    caller, calls = _caller_returning([_connection_error()] * LLM_DEFAULT_MAX_RETRIES)
+
+    with pytest.raises(APIConnectionError) as exc_info:
+        caller.call(LLMMessage(Role="user", Message="hi"))
+    assert len(calls) == LLM_DEFAULT_MAX_RETRIES
+    assert exc_info.value.fdllm_attempts == LLM_DEFAULT_MAX_RETRIES
+    assert exc_info.value.fdllm_retries_exhausted is True
+
+
+def test_acall_final_error_records_exhausted_budget(no_wait):
+    caller, calls = _caller_returning([_empty_response()] * LLM_DEFAULT_MAX_RETRIES)
+
+    with pytest.raises(EmptyLLMResponse) as exc_info:
+        asyncio.run(caller.acall(LLMMessage(Role="user", Message="hi")))
+    assert exc_info.value.fdllm_attempts == LLM_DEFAULT_MAX_RETRIES
+    assert exc_info.value.fdllm_retries_exhausted is True
+
+
+def test_non_retryable_error_records_single_attempt(no_wait):
+    caller, calls = _caller_returning([_empty_response("content_filter")])
+
+    with pytest.raises(LLMContentFiltered) as exc_info:
+        caller.call(LLMMessage(Role="user", Message="hi"))
+    assert exc_info.value.fdllm_attempts == 1
+    assert exc_info.value.fdllm_retries_exhausted is False

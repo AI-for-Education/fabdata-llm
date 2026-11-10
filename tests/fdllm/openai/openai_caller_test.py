@@ -910,3 +910,82 @@ def test_completions_tokenize():
 
     assert isinstance(tokens, list)
     assert len(tokens) > 0
+
+
+# ===== Errors reported inside an HTTP 200 response (e.g. OpenRouter) =====
+
+from fdllm.errors import LLMProviderError, LLMProviderRejected
+from fdllm.openai.caller import _sdk_client_args
+
+
+def _choice(content, finish_reason="stop", **extra):
+    return SimpleNamespace(
+        message=SimpleNamespace(content=content, tool_calls=None, refusal=None),
+        logprobs=None,
+        finish_reason=finish_reason,
+        **extra,
+    )
+
+
+@pytest.mark.parametrize(
+    "error, error_cls, retryable",
+    [
+        ({"code": 502, "message": "Upstream error"}, LLMProviderError, True),
+        ({"code": 429, "message": "Rate limited"}, LLMProviderError, True),
+        ({"code": 401, "message": "Bad key"}, LLMProviderRejected, False),
+        ({"code": 402, "message": "No credits"}, LLMProviderRejected, False),
+        ({"message": "Something failed"}, LLMProviderError, True),
+        ("plain string error", LLMProviderError, True),
+    ],
+)
+def test_format_output_top_level_error(error, error_cls, retryable):
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    output = SimpleNamespace(id="gen-1", choices=None, usage=None, error=error)
+
+    with pytest.raises(error_cls) as exc_info:
+        caller.format_output(output)
+    assert type(exc_info.value) is error_cls
+    assert exc_info.value.retryable is retryable
+    assert exc_info.value.response_id == "gen-1"
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [{"error": {"code": 502, "message": "Upstream error"}}, {}],
+    ids=["with_choice_error", "finish_reason_only"],
+)
+def test_format_output_partial_text_with_error_raises(extra):
+    """Partial output followed by a provider error must not be returned as a success."""
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    output = SimpleNamespace(
+        id="gen-2", usage=None, choices=[_choice("The answer is", "error", **extra)]
+    )
+
+    with pytest.raises(LLMProviderError) as exc_info:
+        caller.format_output(output)
+    assert exc_info.value.retryable is True
+
+
+@pytest.mark.parametrize(
+    "error", [None, {}, {"message": "", "code": None}, ""], ids=["none", "empty", "blank", "empty_str"]
+)
+def test_format_output_ignores_empty_error_objects(error):
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    output = SimpleNamespace(id="gen-3", usage=None, choices=[_choice("hello")], error=error)
+
+    assert caller.format_output(output).Message == "hello"
+
+
+def test_completions_format_output_top_level_error():
+    caller = OpenAICompletionsCaller(model="text-davinci-003")
+    output = SimpleNamespace(choices=None, error={"code": 503, "message": "Unavailable"})
+
+    with pytest.raises(LLMProviderError) as exc_info:
+        caller.format_output(output)
+    assert exc_info.value.retryable is True
+
+
+def test_sdk_retries_disabled_unless_configured():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    assert caller.Func.__self__._client.max_retries == 0
+    assert _sdk_client_args(SimpleNamespace(Client_Args={"max_retries": 3}))["max_retries"] == 3
