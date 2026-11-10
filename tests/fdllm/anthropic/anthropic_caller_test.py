@@ -116,9 +116,13 @@ class TestInitialization:
         """Test ClaudeStreamingCaller initialization."""
         caller = ClaudeStreamingCaller(model=DEFAULT_CLAUDE_MODEL)
         assert caller.Model.Name == DEFAULT_CLAUDE_MODEL
-        # Streaming caller only retries rate limits at the transport level
-        from anthropic import RateLimitError
-        assert caller._transport_errors == (RateLimitError,)
+
+    @pytest.mark.parametrize("caller_cls", [ClaudeCaller, ClaudeStreamingCaller])
+    def test_sdk_retries_disabled(self, caller_cls):
+        """fdllm's retry loop is the only retry layer."""
+        caller = caller_cls(model=DEFAULT_CLAUDE_MODEL)
+        assert caller.Client.max_retries == 0
+        assert caller.AClient.max_retries == 0
 
 
 # ============================================================================

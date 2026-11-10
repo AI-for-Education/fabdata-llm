@@ -13,15 +13,10 @@ from io import BytesIO
 from pathlib import Path
 from typing import (
     Any,
-    ClassVar,
     Literal,
 )
 
 import numpy as np
-from anthropic import RateLimitError as RateLimitErrorAnthropic
-from google.genai.errors import ServerError
-from openai import APIConnectionError
-from openai import RateLimitError as RateLimitErrorOpenAI
 from PIL import Image, ImageFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.dataclasses import dataclass
@@ -34,7 +29,6 @@ from tenacity import (
     before_log,
     before_sleep_log,
     retry_if_exception,
-    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
@@ -43,8 +37,9 @@ from .constants import (
     LLM_DEFAULT_MAX_RETRIES,
     LLM_DEFAULT_MAX_TOKENS,
 )
-from .errors import LLMResponseModelNameMismatch, is_retryable_response_error
+from .errors import LLMResponseModelNameMismatch
 from .logging_utils import get_logger, log_call_completion, log_call_start
+from .retry import record_attempts, should_retry, wait_retry_after
 from .sysutils import deepmerge_dicts, get_google_token, load_models
 
 
@@ -345,13 +340,6 @@ class LLMCaller(ABC, BaseModel):
     response_model_validation_mode: ResponseValidationMode = (
         ResponseValidationMode.ALLOW_ALL
     )
-    # transport errors worth re-sending the request for
-    _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (
-        RateLimitErrorOpenAI,
-        RateLimitErrorAnthropic,
-        APIConnectionError,
-        ServerError,
-    )
 
     @property
     def logger(self) -> logging.Logger:
@@ -361,18 +349,15 @@ class LLMCaller(ABC, BaseModel):
     def _retry_kwargs(self):
         """Tenacity settings for re-sending a request, shared by call and acall.
 
-        Transport errors and LLMResponseErrors flagged as retryable (e.g. a
-        transient empty response) draw on the same attempt budget. Content
-        filtering, token exhaustion and invalid response shapes are raised
-        immediately.
+        Transient transport/HTTP errors and LLMResponseErrors flagged as
+        retryable (e.g. a transient empty response) draw on the same attempt
+        budget; see fdllm.retry.should_retry. The server's Retry-After is
+        honoured, otherwise the wait backs off exponentially.
         """
         return dict(
             stop=stop_after_attempt(LLM_DEFAULT_MAX_RETRIES),
-            wait=wait_exponential(multiplier=1, min=1, max=60),
-            retry=(
-                retry_if_exception_type(self._transport_errors)
-                | retry_if_exception(is_retryable_response_error)
-            ),
+            wait=wait_retry_after(wait_exponential(multiplier=1, min=1, max=60)),
+            retry=retry_if_exception(should_retry),
             before=before_log(self.logger, logging.DEBUG),
             before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=True),
             after=after_log(self.logger, logging.DEBUG),
@@ -426,12 +411,14 @@ class LLMCaller(ABC, BaseModel):
         # Log call start
         start_time = log_call_start(self.logger, self.Model.Name, msg_list, "sync")
 
+        attempts = 0
         try:
             kwargs = self._proc_call_args(
                 messages, max_tokens, response_schema, **kwargs
             )
             for attempt in Retrying(**self._retry_kwargs()):
                 with attempt:
+                    attempts = attempt.retry_state.attempt_number
                     response, latency = self._call(**kwargs)
                     formatted_output = self.format_output(
                         response, response_schema=response_schema, latency=latency
@@ -442,6 +429,7 @@ class LLMCaller(ABC, BaseModel):
             log_call_completion(self.logger, self.Model.Name, start_time, response)
             return formatted_output
         except Exception as e:
+            record_attempts(e, attempts)
             # Log failed completion
             log_call_completion(self.logger, self.Model.Name, start_time, error=e)
             raise
@@ -459,12 +447,14 @@ class LLMCaller(ABC, BaseModel):
         # Log call start
         start_time = log_call_start(self.logger, self.Model.Name, msg_list, "async")
 
+        attempts = 0
         try:
             kwargs = self._proc_call_args(
                 messages, max_tokens, response_schema, **kwargs
             )
             async for attempt in AsyncRetrying(**self._retry_kwargs()):
                 with attempt:
+                    attempts = attempt.retry_state.attempt_number
                     response, latency = await self._acall(**kwargs)
                     formatted_output = self.format_output(
                         response, response_schema=response_schema, latency=latency
@@ -475,6 +465,7 @@ class LLMCaller(ABC, BaseModel):
             log_call_completion(self.logger, self.Model.Name, start_time, response)
             return formatted_output
         except Exception as e:
+            record_attempts(e, attempts)
             # Log failed completion
             log_call_completion(self.logger, self.Model.Name, start_time, error=e)
             raise
