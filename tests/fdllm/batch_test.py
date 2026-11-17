@@ -175,9 +175,8 @@ def test_anthropic_check_batch_support_probe():
 def test_google_check_batch_support_probe():
     caller = GoogleGenAICaller(DEFAULT_GEMINI_MODEL)
     caller.Client = MagicMock()
-    pager = caller.Client.batches.list.return_value
     assert caller.check_batch_support() is BatchSupport.SUPPORTED
-    pager.next_page.assert_called_once()
+    caller.Client.batches.list.assert_called_once()
 
 
 # ===== OpenAI provider batch =====
