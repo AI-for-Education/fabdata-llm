@@ -420,9 +420,15 @@ class GoogleGenAICaller(LLMCaller):
         )
 
     def _probe_batch_support(self) -> BatchSupport:
-        self.Client.batches.list().next_page()
+        # iterating fetches the first page; next_page() raises IndexError
+        # on an empty result
+        next(iter(self.Client.batches.list()), None)
         return BatchSupport.SUPPORTED
 
     async def _aprobe_batch_support(self) -> BatchSupport:
-        await self.Client.aio.batches.list().next_page()
+        pager = self.Client.aio.batches.list()
+        try:
+            await pager.__anext__()
+        except StopAsyncIteration:
+            pass
         return BatchSupport.SUPPORTED
