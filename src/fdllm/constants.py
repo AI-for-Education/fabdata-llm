@@ -9,4 +9,6 @@ LLM_QUESTION_TOO_LONG = "The question you have submitted is too long, please red
 
 LLM_DEFAULT_MAX_TOKENS = 500
 
+# attempts per request, shared by transport errors and retryable empty
+# responses (see fdllm.errors)
 LLM_DEFAULT_MAX_RETRIES = 8

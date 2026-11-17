@@ -2,9 +2,7 @@ import pytest
 from unittest.mock import patch
 from itertools import product
 from typing import List
-from pathlib import Path
 
-from dotenv import load_dotenv
 from pydantic import Field
 
 from fdllm import get_caller
@@ -17,11 +15,6 @@ from fdllm.tooluse import (
     ToolInvalidParamError,
     ToolMissingParamError,
 )
-
-HERE = Path(__file__).resolve().parent
-TEST_ROOT = HERE
-
-load_dotenv(TEST_ROOT / "test.env", override=True)
 
 
 class TESTTOOL1(Tool):

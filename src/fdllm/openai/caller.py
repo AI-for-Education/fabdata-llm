@@ -31,6 +31,43 @@ from ..llmtypes import (
     LLMDocument,
 )
 from ..tooluse import Tool
+from ..errors import (
+    EmptyLLMResponse,
+    InvalidProviderResponse,
+    LLMContentFiltered,
+    empty_response_error,
+    ensure_nonempty,
+    provider_error,
+    safe_usage,
+)
+
+
+def _sdk_client_args(model: LLMModelType) -> dict:
+    # fdllm's retry loop is the only retry layer (see fdllm.retry); an explicit
+    # max_retries in Client_Args still wins
+    return {"max_retries": 0, **model.Client_Args}
+
+
+def _raise_if_provider_error(output, error_meta):
+    """Raise if an HTTP 200 response carries an error instead of a completion.
+
+    OpenRouter reports failures after it has accepted a request this way: a
+    top-level ``error`` object (no choices), or an ``error`` on a choice with
+    ``finish_reason: "error"`` next to partial output. Empty error objects,
+    which some providers send on success, are ignored (as in LiteLLM).
+    """
+    choices = getattr(output, "choices", None) or []
+    choice = choices[0] if choices else None
+    error = getattr(output, "error", None) or getattr(choice, "error", None)
+    if isinstance(error, dict):
+        code = error.get("code")
+        meaningful = bool(error.get("message")) or code is not None
+    else:
+        code = None
+        meaningful = isinstance(error, str) and bool(error)
+    if meaningful or getattr(choice, "finish_reason", None) == "error":
+        # the provider's message is not attached: it may echo prompt content
+        raise provider_error("Provider returned an error", code=code, **error_meta)
 
 
 class OpenAICaller(LLMCaller):
@@ -38,12 +75,13 @@ class OpenAICaller(LLMCaller):
         Modtype = LLMModelType.get_type(model)
         model_: LLMModelType = Modtype(Name=model)
 
+        client_args = _sdk_client_args(model_)
         if Modtype in [OpenAIModelType, VertexAIModelType]:
-            client = OpenAI(**model_.Client_Args)
-            aclient = AsyncOpenAI(**model_.Client_Args)
+            client = OpenAI(**client_args)
+            aclient = AsyncOpenAI(**client_args)
         elif Modtype in [AzureOpenAIModelType]:
-            client = AzureOpenAI(azure_deployment=model, **model_.Client_Args)
-            aclient = AsyncAzureOpenAI(azure_deployment=model, **model_.Client_Args)
+            client = AzureOpenAI(azure_deployment=model, **client_args)
+            aclient = AsyncAzureOpenAI(azure_deployment=model, **client_args)
 
         call_arg_names = LLMCallArgNames(
             Model="model",
@@ -159,7 +197,10 @@ class OpenAICaller(LLMCaller):
         response_schema: Optional[type[BaseModel]] = None,
         latency: Optional[float] = None,
     ):
-        return _gpt_common_fmt_output(output, latency)
+        out = _gpt_common_fmt_output(output, latency, model=self.Model.Name)
+        if isinstance(out, LLMMessage):
+            out.ResponseModel = self._parse_model_name_string(out.ResponseModel)
+        return out
 
     def tokenize(self, messagelist: List[LLMMessage]):
         if self.Model.Vision:
@@ -207,10 +248,12 @@ class OpenAICaller(LLMCaller):
         return kwargs
 
 
-def _gpt_common_fmt_output(output, latency):
+def _gpt_common_fmt_output(output, latency, model=None):
     if isinstance(output, GeneratorType):
         return output
     else:
+        # get the model used for response
+        response_model = getattr(output, "model", None)
         usage = getattr(output, "usage",  None)
         if usage is None:
             token_count_kwargs = {}
@@ -225,17 +268,31 @@ def _gpt_common_fmt_output(output, latency):
                 TokensUsedCompletion=output.usage.completion_tokens,
                 TokensUsedReasoning=reasoning_tokens,
             )
+        error_meta = dict(
+            provider="openai",
+            model=model or getattr(output, "model", None),
+            response_id=getattr(output, "id", None),
+            usage=safe_usage(
+                usage, "prompt_tokens", "completion_tokens", "total_tokens"
+            ),
+        )
+        _raise_if_provider_error(output, error_meta)
+        if not getattr(output, "choices", None):
+            raise EmptyLLMResponse("Empty response: no choices", **error_meta)
+        error_meta["stop_reason"] = getattr(output.choices[0], "finish_reason", None)
         msg = output.choices[0].message
         logprobs = getattr(output.choices[0], "logprobs", None)
-        if msg.content is not None:
-            return LLMMessage(
+        if msg.content and msg.content.strip():
+            out = LLMMessage(
                 Role="assistant",
                 Message=msg.content,
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
+                ResponseModel=response_model,
             )
-        elif msg.tool_calls is not None:
+            return ensure_nonempty(out, **error_meta)
+        elif msg.tool_calls:
             tcs = [
                 LLMToolCall(
                     ID=tc.id,
@@ -244,15 +301,22 @@ def _gpt_common_fmt_output(output, latency):
                 )
                 for tc in msg.tool_calls
             ]
-            return LLMMessage(
+            out = LLMMessage(
                 Role="assistant",
                 ToolCalls=tcs,
                 **token_count_kwargs,
                 LogProbs=logprobs,
                 Latency=latency,
+                ResponseModel=response_model,
             )
+            return ensure_nonempty(out, **error_meta)
+        elif getattr(msg, "refusal", None):
+            # the refusal text is model output, so it is not attached to the error
+            raise LLMContentFiltered("The model refused to respond", **error_meta)
         else:
-            raise ValueError("Output must be either content or tool call")
+            raise empty_response_error(
+                "Output must be either content or tool call", **error_meta
+            )
 
 
 class OpenAICompletionsCaller(OpenAICaller):
@@ -267,8 +331,9 @@ class OpenAICompletionsCaller(OpenAICaller):
         model_: LLMModelType = Modtype(Name=model)
 
         # Create clients for completions API
-        client = OpenAI(**model_.Client_Args)
-        aclient = AsyncOpenAI(**model_.Client_Args)
+        client_args = _sdk_client_args(model_)
+        client = OpenAI(**client_args)
+        aclient = AsyncOpenAI(**client_args)
 
         call_arg_names = LLMCallArgNames(
             Model="model",
@@ -353,16 +418,29 @@ class OpenAICompletionsCaller(OpenAICaller):
             return output
         else:
             # Completions API returns text in choices[0].text instead of choices[0].message.content
-            if hasattr(output, "choices") and len(output.choices) > 0:
-                choice = output.choices[0]
-                if hasattr(choice, "text"):
-                    return LLMMessage(
-                        Role="assistant", Message=choice.text, Latency=latency
-                    )
-                else:
-                    raise ValueError("Unexpected completions API response format")
-            else:
-                raise ValueError("Invalid completions API response")
+            error_meta = dict(
+                provider="openai",
+                model=self.Model.Name,
+                response_id=getattr(output, "id", None),
+                usage=safe_usage(
+                    getattr(output, "usage", None),
+                    "prompt_tokens",
+                    "completion_tokens",
+                    "total_tokens",
+                ),
+            )
+            _raise_if_provider_error(output, error_meta)
+            choices = getattr(output, "choices", None)
+            if not choices:
+                raise EmptyLLMResponse("Empty response: no choices", **error_meta)
+            choice = choices[0]
+            error_meta["stop_reason"] = getattr(choice, "finish_reason", None)
+            if not hasattr(choice, "text"):
+                raise InvalidProviderResponse(
+                    "Unexpected completions API response format", **error_meta
+                )
+            out = LLMMessage(Role="assistant", Message=choice.text, Latency=latency)
+            return ensure_nonempty(out, **error_meta)
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):
         """Process call arguments for the completions API."""

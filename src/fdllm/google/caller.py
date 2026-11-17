@@ -11,6 +11,35 @@ from openai.types.chat.chat_completion_token_logprob import (
 
 from ..llmtypes import LLMCallArgNames, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
 from ..tooluse import Tool
+from ..errors import (
+    EmptyLLMResponse,
+    InvalidProviderResponse,
+    LLMContentFiltered,
+    empty_response_error,
+    ensure_nonempty,
+    safe_usage,
+)
+
+# Part fields checked, in order, to name a part's type in error metadata
+# see https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/inference#parts
+_PART_FIELDS = (
+    "function_call",
+    "function_response",
+    "text",
+    "inline_data",
+    "file_data",
+    "executable_code",
+    "code_execution_result",
+)
+
+
+def _part_type(part) -> str:
+    if getattr(part, "thought", None):
+        return "thought"
+    for field in _PART_FIELDS:
+        if getattr(part, field, None) is not None:
+            return field
+    return "unknown"
 
 
 class GoogleGenAICaller(LLMCaller):
@@ -181,6 +210,7 @@ class GoogleGenAICaller(LLMCaller):
             "seed",
             "response_mime_type",
             "response_schema",
+            "thinking_config",
         ]:
             config[arg] = kwargs.pop(arg, None)
         if config.get("response_schema"):
@@ -199,19 +229,49 @@ class GoogleGenAICaller(LLMCaller):
         if isinstance(output, GeneratorType):
             return output
         else:
+            # get the model used for response
+            response_model = self._parse_model_name_string(getattr(output, "model_version", None))
             ## token counts
             usage_metadata = getattr(output, "usage_metadata", None)
             if usage_metadata is not None:
-                token_count_kwargs = dict(
-                    TokensUsed=usage_metadata.total_token_count,
-                    TokensUsedCompletion=usage_metadata.candidates_token_count,
-                    TokensUsedReasoning=usage_metadata.thoughts_token_count,
-                )
+                token_count_kwargs = {
+                    "TokensUsed": usage_metadata.total_token_count,
+                    "TokensUsedCompletion": usage_metadata.candidates_token_count,
+                    "TokensUsedReasoning": usage_metadata.thoughts_token_count,
+                }
             else:
                 token_count_kwargs = {}
             #####
-            parts = getattr(output.candidates[0].content, "parts", None)
-            logprobs_result = getattr(output.candidates[0], "logprobs_result", None)
+            error_meta = dict(
+                provider="google",
+                model=self.Model.Name,
+                response_id=getattr(output, "response_id", None),
+                usage=safe_usage(
+                    usage_metadata,
+                    "prompt_token_count",
+                    "candidates_token_count",
+                    "thoughts_token_count",
+                    "total_token_count",
+                ),
+            )
+            candidates = getattr(output, "candidates", None)
+            if not candidates:
+                block_reason = getattr(
+                    getattr(output, "prompt_feedback", None), "block_reason", None
+                )
+                error_cls = LLMContentFiltered if block_reason else EmptyLLMResponse
+                raise error_cls(
+                    "Empty response: no candidates",
+                    details={"block_reason": block_reason},
+                    **error_meta,
+                )
+            candidate = candidates[0]
+            error_meta["stop_reason"] = getattr(candidate, "finish_reason", None)
+            parts = getattr(getattr(candidate, "content", None), "parts", None)
+            error_meta["block_types"] = [_part_type(p) for p in parts or []]
+            if not parts:
+                raise empty_response_error("Empty response: no content parts", **error_meta)
+            logprobs_result = getattr(candidate, "logprobs_result", None)
             if logprobs_result is not None:
                 logprobs = ChoiceLogprobs(
                     content=[
@@ -233,18 +293,18 @@ class GoogleGenAICaller(LLMCaller):
                 )
             else:
                 logprobs = None
-            if parts is not None and getattr(parts[0], "text", None) is not None:
-                return LLMMessage(
+            text = getattr(parts[0], "text", None)
+            if text:
+                out = LLMMessage(
                     Role="assistant",
-                    Message=parts[0].text,
+                    Message=text,
                     LogProbs=logprobs,
                     Latency=latency,
+                    ResponseModel=response_model,
                     **token_count_kwargs,
                 )
-            elif (
-                parts is not None
-                and getattr(parts[0], "function_call", None) is not None
-            ):
+                return ensure_nonempty(out, **error_meta)
+            elif getattr(parts[0], "function_call", None) is not None:
                 tcs = [
                     LLMToolCall(
                         ID=p.function_call.id,
@@ -254,15 +314,23 @@ class GoogleGenAICaller(LLMCaller):
                     for p in parts
                     if getattr(p, "function_call", None) is not None
                 ]
-                return LLMMessage(
+                out = LLMMessage(
                     Role="assistant",
                     ToolCalls=tcs,
                     LogProbs=logprobs,
                     Latency=latency,
+                    ResponseModel=response_model,
                     **token_count_kwargs,
                 )
+                return ensure_nonempty(out, **error_meta)
+            elif text is not None:
+                raise empty_response_error(
+                    "Empty response: no text or tool calls", **error_meta
+                )
             else:
-                raise ValueError("Output must be either content or tool call")
+                raise InvalidProviderResponse(
+                    "Output must be either content or tool call", **error_meta
+                )
 
     # this is counting tokens with an API call
     # could count tokens locally with vertex sdk

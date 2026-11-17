@@ -19,6 +19,7 @@ from ..llmtypes import (
 )
 from ..constants import LLM_DEFAULT_MAX_TOKENS
 from ..tooluse import Tool
+from ..errors import empty_response_error, ensure_nonempty, safe_usage
 
 encoding = tiktoken.get_encoding("gpt2")
 
@@ -204,6 +205,20 @@ class BedrockCaller(LLMCaller):
             return output
         else:
             content = output["output"]["message"]["content"]
+            error_meta = dict(
+                provider="bedrock",
+                model=self.Model.Name,
+                response_id=output.get("ResponseMetadata", {}).get("RequestId"),
+                stop_reason=output.get("stopReason"),
+                block_types=[k for c in content or [] for k in c],
+                usage=safe_usage(
+                    output.get("usage"), "inputTokens", "outputTokens", "totalTokens"
+                ),
+            )
+            if not content:
+                raise empty_response_error(
+                    "Empty response: no content blocks", **error_meta
+                )
             if output["stopReason"] == "tool_use":
                 tool_calls = [c["toolUse"] for c in content if "toolUse" in c]
                 tcs = [
@@ -214,11 +229,12 @@ class BedrockCaller(LLMCaller):
                     )
                     for tc in tool_calls
                 ]
-                return LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
+                out = LLMMessage(Role="assistant", ToolCalls=tcs, Latency=latency)
             else:
                 text = "".join([c["text"] for c in content if "text" in c]).lstrip()
                 # images = [c["image"] for c in content if "image" in c]
-                return LLMMessage(Role="assistant", Message=text, Latency=latency)
+                out = LLMMessage(Role="assistant", Message=text, Latency=latency)
+            return ensure_nonempty(out, **error_meta)
 
     def tokenize(self, messagelist: List[LLMMessage]):
         return tokenize_bedrock_messages(self.format_messagelist(messagelist))[0]
