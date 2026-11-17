@@ -23,7 +23,12 @@ from fdllm.errors import (
     is_retryable_status,
     provider_error,
 )
-from fdllm.retry import retry_after_seconds, should_retry, wait_retry_after
+from fdllm.retry import (
+    record_attempts,
+    retry_after_seconds,
+    should_retry,
+    wait_retry_after,
+)
 
 _REQUEST = httpx.Request("POST", "https://example.invalid/v1/x")
 _OPENAI = openai.OpenAI(api_key="x")
@@ -211,3 +216,25 @@ def test_wait_uses_retry_after_else_fallback():
     assert wait(_state(openai_error(429, headers={"retry-after": "2"}))) == 2.0
     assert wait(_state(openai_error(429))) == 7.0
     assert wait(_state(httpx.ReadError("reset"))) == 7.0
+
+def test_record_attempts_ignores_exceptions_without_attribute_space():
+    """Exceptions that forbid new attributes (e.g. a setter-less property) pass through."""
+
+    class ReadOnly(Exception):
+        @property
+        def fdllm_attempts(self):
+            return None
+
+    record_attempts(ReadOnly("x"), 1)
+
+
+def test_record_attempts_marks_budget_exhaustion():
+    exc = openai_error(429)
+    record_attempts(exc, 8)
+    assert exc.fdllm_attempts == 8
+    assert exc.fdllm_retries_exhausted is True
+
+    exc = openai_error(400)
+    record_attempts(exc, 1)
+    assert exc.fdllm_attempts == 1
+    assert exc.fdllm_retries_exhausted is False

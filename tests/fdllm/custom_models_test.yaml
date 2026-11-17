@@ -71,6 +71,20 @@ OpenAI:
       Token_Limit_Completion: 32768
       Document: False
 
+AzureOpenAI:
+  Api_Interface: AzureOpenAI
+  Token_Window: 128000
+  Token_Limit_Completion: 16384
+  Tool_Use: True
+  Vision: True
+  Client_Args:
+    azure_endpoint: "https://fdllm-test.openai.azure.com/"
+    api_version: "2024-02-01"
+    api_key: "test-key"
+  models:
+    azure-gpt-test:
+      Api_Model_Name: gpt-4.1-mini
+
 AzureMistral:
   Api_Interface: AzureMistralAI
   Token_Window: 32000

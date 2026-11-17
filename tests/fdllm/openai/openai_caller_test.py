@@ -989,3 +989,10 @@ def test_sdk_retries_disabled_unless_configured():
     caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
     assert caller.Func.__self__._client.max_retries == 0
     assert _sdk_client_args(SimpleNamespace(Client_Args={"max_retries": 3}))["max_retries"] == 3
+
+
+def test_azure_caller_uses_same_client_args():
+    """Azure deployments go through the same _sdk_client_args path."""
+    caller = OpenAICaller("azure-gpt-test")
+    assert caller.Func.__self__._client.max_retries == 0
+    assert caller.AFunc.__self__._client.max_retries == 0
