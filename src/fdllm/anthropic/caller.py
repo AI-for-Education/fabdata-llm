@@ -1,5 +1,5 @@
 import os
-from typing import ClassVar, List, Optional
+from typing import List, Optional
 from types import GeneratorType
 import json
 import time
@@ -7,7 +7,6 @@ import time
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
-from anthropic import RateLimitError as RateLimitErrorAnthropic
 from pydantic import BaseModel, ConfigDict
 
 from ..llmtypes import (
@@ -50,8 +49,11 @@ class ClaudeCaller(LLMCaller):
             raise ValueError(f"{model} is not supported")
 
         model_: LLMModelType = Modtype(Name=model)
-        client = Anthropic(**model_.Client_Args)
-        aclient = AsyncAnthropic(**model_.Client_Args)
+        # fdllm's retry loop is the only retry layer (see fdllm.retry); an
+        # explicit max_retries in Client_Args still wins
+        client_args = {"max_retries": 0, **model_.Client_Args}
+        client = Anthropic(**client_args)
+        aclient = AsyncAnthropic(**client_args)
 
         call_arg_names = LLMCallArgNames(
             Model="model",
@@ -336,9 +338,9 @@ class ClaudeCaller(LLMCaller):
 
 
 class ClaudeStreamingCaller(ClaudeCaller):
-    _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (
-        RateLimitErrorAnthropic,
-    )
+    # Retries follow the shared rules in fdllm.retry. Re-sending is safe: _call
+    # reads the whole stream before anything is returned, so a failed attempt
+    # (connection reset, an error event mid-stream) leaves nothing behind.
 
     def __init__(self, model: str):
         super().__init__(model)

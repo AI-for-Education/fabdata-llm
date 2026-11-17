@@ -135,6 +135,44 @@ class LLMContentFiltered(EmptyLLMResponse):
         return False
 
 
+def is_retryable_status(code: int) -> bool:
+    """HTTP status codes worth re-sending a request for: 408, 409, 429 and 5xx.
+
+    The rule the OpenAI SDK and LiteLLM use.
+    """
+    return code in (408, 409, 429) or code >= 500
+
+
+class LLMProviderError(LLMResponseError):
+    """The provider reported an error inside a successful (HTTP 200) response.
+
+    E.g. OpenRouter, after it has accepted a request, reports upstream failures
+    as an ``error`` object in the body. Retried, since such failures are mostly
+    transient; ``details["code"]`` holds the reported code, if any.
+    """
+
+    def _default_retryable(self) -> bool:
+        return True
+
+
+class LLMProviderRejected(LLMProviderError):
+    """A provider-reported error whose code says a retry will not help (e.g. 401, 402)."""
+
+    def _default_retryable(self) -> bool:
+        return False
+
+
+def provider_error(message: str, code: Any = None, **kwargs) -> LLMProviderError:
+    """Build an LLMProviderError, or LLMProviderRejected for a non-retryable code.
+
+    The code is read as an HTTP status code; a missing or non-integer code is retried.
+    """
+    code = code if isinstance(code, int) and not isinstance(code, bool) else None
+    rejected = code is not None and not is_retryable_status(code)
+    error_cls = LLMProviderRejected if rejected else LLMProviderError
+    return error_cls(message, details={"code": code}, **kwargs)
+
+
 class LLMResponseModelNameMismatch(LLMResponseError):
     """The provider response model name does not match the api model name that was sent."""
 

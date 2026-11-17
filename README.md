@@ -321,6 +321,38 @@ To avoid storing API keys in config files, you can also have multiple keys store
 
 The [sandbox](./sandbox) folder contains examples of different use cases.
 
+### Errors and Retries
+
+`call()` and `acall()` send a request at most 8 times (`LLM_DEFAULT_MAX_RETRIES`). This is the only retry layer: the OpenAI and Anthropic SDK clients are created with `max_retries=0` (set `max_retries` in `Client_Args` to opt back into SDK retries). One exception: with `aiohttp` installed, google-genai re-sends async Gemini requests once by itself after a connection error (following a 1–10 s sleep), so such a call can send up to 2 requests per attempt.
+
+A failed request is re-sent when:
+
+- the connection failed, was reset or timed out;
+- the HTTP status is 408, 409, 429 or 5xx (except OpenAI's `insufficient_quota` 429), unless the server's `x-should-retry` header says otherwise;
+- Anthropic sends an `overloaded_error` or `api_error` event inside a stream;
+- the response is unusable but may not be next time: `EmptyLLMResponse` (unless the token limit was hit) and `LLMProviderError`.
+
+Other errors (e.g. 400, 401, 403, 404, `LLMContentFiltered`, `LLMProviderRejected`) are raised immediately. Between attempts the caller waits for the server's `Retry-After`/`retry-after-ms` (up to 60 s), otherwise with exponential backoff (1 s doubling to 60 s).
+
+Provider SDK exceptions are raised as they are. fdllm's own errors all subclass `LLMResponseError` (a `ValueError`):
+
+| Error | Meaning | Retried |
+|---|---|---|
+| `EmptyLLMResponse` | No text or tool calls in the response | Yes, unless the token limit was hit |
+| `LLMContentFiltered` | Refusal, safety filter or guardrail | No |
+| `InvalidProviderResponse` | Response shape fdllm cannot read | No |
+| `LLMProviderError` | Provider reported an error inside an HTTP 200 response (e.g. OpenRouter), or partial output ended with `finish_reason: "error"` | Yes |
+| `LLMProviderRejected` | As above, with a code a retry will not fix (e.g. 401, 402) | No |
+
+The final exception carries `fdllm_attempts` (requests sent) and `fdllm_retries_exhausted` (`True` if the call gave up only because it ran out of attempts):
+
+```python
+try:
+    caller.call("Hello")
+except Exception as e:
+    print(getattr(e, "fdllm_attempts", None), getattr(e, "fdllm_retries_exhausted", None))
+```
+
 ### Logging
 
 FabData-LLM provides comprehensive logging for API calls and retry behavior. The library uses [Tenacity](https://tenacity.readthedocs.io/) for retry logic. By default, the library operates silently, but you can enable detailed logging for debugging and monitoring.
