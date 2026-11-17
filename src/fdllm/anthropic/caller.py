@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from types import GeneratorType
 import json
 import time
@@ -9,12 +9,16 @@ from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types.beta import BetaThinkingBlock, BetaToolUseBlock, BetaTextBlock
 from pydantic import BaseModel, ConfigDict
 
+from ..batch import AnthropicBatch
+from ..constants import LLM_DEFAULT_MAX_TOKENS
 from ..llmtypes import (
     LLMCaller,
     LLMCallArgNames,
     AnthropicModelType,
     AnthropicStreamingModelType,
     LLMModelType,
+    LLMBatchRequest,
+    BatchSupport,
     LLMMessage,
     LLMToolCall,
     LLMDocument,
@@ -22,6 +26,13 @@ from ..llmtypes import (
 from ..tooluse import Tool
 from ..errors import empty_response_error, ensure_nonempty, safe_usage
 from ..decorators import delayedretry
+
+
+# request-option kwargs the SDK accepts on create() but which are not valid
+# message params for a batch request
+_BATCH_PARAM_STRIP_KEYS = frozenset(
+    {"extra_headers", "extra_query", "extra_body", "timeout"}
+)
 
 
 def _thinking_tokens(usage) -> int:
@@ -42,6 +53,8 @@ class ClaudeCaller(LLMCaller):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     Client: anthropic._base_client.BaseClient
     AClient: anthropic._base_client.BaseClient
+
+    Supports_Batch: ClassVar[bool] = True
 
     def __init__(self, model: str):
         Modtype = LLMModelType.get_type(model)
@@ -335,6 +348,80 @@ class ClaudeCaller(LLMCaller):
             model=self.Model.Api_Model_Name,
             messages=self.format_messagelist(messagelist),
         ).input_tokens
+
+    def _batch_request_params(
+        self, messages, max_tokens, response_schema, call_kwargs
+    ) -> tuple[dict, list]:
+        kwargs = self._proc_call_args(
+            messages, max_tokens, response_schema, **call_kwargs
+        )
+        # "betas" is a create-level argument, not a message param
+        betas = kwargs.pop("betas", None) or []
+        params = {
+            key: val
+            for key, val in kwargs.items()
+            if key not in _BATCH_PARAM_STRIP_KEYS
+        }
+        return params, betas
+
+    def _batch_create_kwargs(self, requests, max_tokens, response_schema, kwargs):
+        # merge "betas" (from kwargs or Model.Call_Args) into the
+        # create-level betas argument; remaining kwargs are call args
+        betas = list(kwargs.pop("betas", None) or [])
+        batch_requests = []
+        for req in requests:
+            params, req_betas = self._batch_request_params(
+                req.Messages, max_tokens, response_schema, kwargs
+            )
+            for beta in req_betas:
+                if beta not in betas:
+                    betas.append(beta)
+            batch_requests.append({"custom_id": req.Custom_Id, "params": params})
+        out = {"requests": batch_requests}
+        if betas:
+            out["betas"] = betas
+        return out
+
+    def create_batch(
+        self,
+        requests,
+        max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        response_schema=None,
+        **kwargs,
+    ) -> AnthropicBatch:
+        reqs = self._coerce_batch_requests(requests)
+        batch = self.Client.beta.messages.batches.create(
+            **self._batch_create_kwargs(reqs, max_tokens, response_schema, kwargs)
+        )
+        return self.get_batch(batch.id, reqs, response_schema)
+
+    async def acreate_batch(
+        self,
+        requests,
+        max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        response_schema=None,
+        **kwargs,
+    ) -> AnthropicBatch:
+        reqs = self._coerce_batch_requests(requests)
+        batch = await self.AClient.beta.messages.batches.create(
+            **self._batch_create_kwargs(reqs, max_tokens, response_schema, kwargs)
+        )
+        return self.get_batch(batch.id, reqs, response_schema)
+
+    def get_batch(
+        self, batch_id: str, requests, response_schema=None
+    ) -> AnthropicBatch:
+        return AnthropicBatch(
+            self, batch_id, self._coerce_batch_requests(requests), response_schema
+        )
+
+    def _probe_batch_support(self) -> BatchSupport:
+        self.Client.beta.messages.batches.list(limit=1)
+        return BatchSupport.SUPPORTED
+
+    async def _aprobe_batch_support(self) -> BatchSupport:
+        await self.AClient.beta.messages.batches.list(limit=1)
+        return BatchSupport.SUPPORTED
 
 
 class ClaudeStreamingCaller(ClaudeCaller):

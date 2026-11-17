@@ -1,5 +1,5 @@
 from types import GeneratorType
-from typing import Any, List, Optional
+from typing import Any, ClassVar, List, Optional
 
 from google import genai
 from pydantic import ConfigDict, BaseModel
@@ -9,7 +9,17 @@ from openai.types.chat.chat_completion_token_logprob import (
     ChatCompletionTokenLogprob,
 )
 
-from ..llmtypes import LLMCallArgNames, LLMCaller, LLMMessage, LLMModelType, LLMToolCall
+from ..batch import GoogleGenAIBatch
+from ..constants import LLM_DEFAULT_MAX_TOKENS
+from ..llmtypes import (
+    LLMCallArgNames,
+    LLMCaller,
+    LLMBatchRequest,
+    BatchSupport,
+    LLMMessage,
+    LLMModelType,
+    LLMToolCall,
+)
 from ..tooluse import Tool
 from ..errors import (
     EmptyLLMResponse,
@@ -45,6 +55,8 @@ def _part_type(part) -> str:
 class GoogleGenAICaller(LLMCaller):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     Client: genai.client.Client
+
+    Supports_Batch: ClassVar[bool] = True
 
     def __init__(self, model: str):
         Modtype = LLMModelType.get_type(model)
@@ -340,3 +352,77 @@ class GoogleGenAICaller(LLMCaller):
             model=self.Model.Api_Model_Name,
             contents=self.format_messagelist(messagelist),
         ).total_tokens
+
+    def _batch_inlined_request(
+        self, messages, custom_id, max_tokens, response_schema, call_kwargs
+    ) -> genai.types.InlinedRequest:
+        kwargs = self._proc_call_args(
+            messages, max_tokens, response_schema, **call_kwargs
+        )
+        return genai.types.InlinedRequest(
+            model=kwargs.pop("model", self.Model.Api_Model_Name),
+            contents=kwargs["contents"],
+            config=kwargs.get("config"),
+            metadata={"key": custom_id} if custom_id else None,
+        )
+
+    def create_batch(
+        self,
+        requests,
+        max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        response_schema=None,
+        display_name: str | None = None,
+        **kwargs,
+    ) -> GoogleGenAIBatch:
+        reqs = self._coerce_batch_requests(requests)
+        src = [
+            self._batch_inlined_request(
+                req.Messages, req.Custom_Id, max_tokens, response_schema, kwargs
+            )
+            for req in reqs
+        ]
+        create_kwargs = {}
+        if display_name is not None:
+            create_kwargs["display_name"] = display_name
+        job = self.Client.batches.create(
+            model=self.Model.Api_Model_Name, src=src, **create_kwargs
+        )
+        return self.get_batch(job.name, reqs, response_schema)
+
+    async def acreate_batch(
+        self,
+        requests,
+        max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        response_schema=None,
+        display_name: str | None = None,
+        **kwargs,
+    ) -> GoogleGenAIBatch:
+        reqs = self._coerce_batch_requests(requests)
+        src = [
+            self._batch_inlined_request(
+                req.Messages, req.Custom_Id, max_tokens, response_schema, kwargs
+            )
+            for req in reqs
+        ]
+        create_kwargs = {}
+        if display_name is not None:
+            create_kwargs["display_name"] = display_name
+        job = await self.Client.aio.batches.create(
+            model=self.Model.Api_Model_Name, src=src, **create_kwargs
+        )
+        return self.get_batch(job.name, reqs, response_schema)
+
+    def get_batch(
+        self, batch_id: str, requests, response_schema=None
+    ) -> GoogleGenAIBatch:
+        return GoogleGenAIBatch(
+            self, batch_id, self._coerce_batch_requests(requests), response_schema
+        )
+
+    def _probe_batch_support(self) -> BatchSupport:
+        self.Client.batches.list().next_page()
+        return BatchSupport.SUPPORTED
+
+    async def _aprobe_batch_support(self) -> BatchSupport:
+        await self.Client.aio.batches.list().next_page()
+        return BatchSupport.SUPPORTED

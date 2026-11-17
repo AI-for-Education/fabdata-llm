@@ -12,3 +12,6 @@ LLM_DEFAULT_MAX_TOKENS = 500
 # attempts per request, shared by transport errors and retryable empty
 # responses (see fdllm.errors)
 LLM_DEFAULT_MAX_RETRIES = 8
+
+# seconds between status polls when waiting on a provider batch job
+LLM_BATCH_POLL_INTERVAL = 60

@@ -1,4 +1,4 @@
-from typing import List, Any, Optional
+from typing import ClassVar, List, Any, Optional
 from types import GeneratorType
 import json
 import os
@@ -8,9 +8,11 @@ from tempfile import NamedTemporaryFile
 
 from openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
 from openai.lib._parsing._completions import type_to_response_format_param
+from openai.types import Completion
+from openai.types.chat import ChatCompletion
 from google.auth import default
 from google.auth.transport import requests
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .tokenizer import (
     tokenize_chatgpt_messages,
@@ -18,6 +20,8 @@ from .tokenizer import (
     tokenize_completions_messages,
 )
 from ..sysutils import deepmerge_dicts
+from ..batch import OpenAIBatch
+from ..constants import LLM_DEFAULT_MAX_TOKENS
 from ..llmtypes import (
     LLMCaller,
     LLMCallArgNames,
@@ -26,6 +30,8 @@ from ..llmtypes import (
     VertexAIModelType,
     AzureOpenAIModelType,
     LLMModelType,
+    LLMBatchRequest,
+    BatchSupport,
     LLMMessage,
     LLMToolCall,
     LLMDocument,
@@ -70,7 +76,23 @@ def _raise_if_provider_error(output, error_meta):
         raise provider_error("Provider returned an error", code=code, **error_meta)
 
 
+# request-option kwargs the SDK accepts but which are not valid in a batch
+# request body
+_BATCH_REQUEST_OPTION_KEYS = frozenset(
+    {"timeout", "extra_headers", "extra_query"}
+)
+
+
 class OpenAICaller(LLMCaller):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    Client: Any
+    AClient: Any
+
+    Supports_Batch: ClassVar[bool] = True
+
+    _batch_url: ClassVar[str] = "/v1/chat/completions"
+    _batch_output_parser: ClassVar = staticmethod(ChatCompletion.model_validate)
+
     def __init__(self, model: str):
         Modtype = LLMModelType.get_type(model)
         model_: LLMModelType = Modtype(Name=model)
@@ -98,6 +120,8 @@ class OpenAICaller(LLMCaller):
             Defaults={},
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
+            Client=client,
+            AClient=aclient,
         )
 
     def format_message(self, message: LLMMessage):
@@ -247,6 +271,104 @@ class OpenAICaller(LLMCaller):
             kwargs["extra_body"] = self.Model.Extra_Body
         return kwargs
 
+    def _batch_request_body(
+        self, messages, max_tokens, response_schema, call_kwargs
+    ) -> dict:
+        kwargs = self._proc_call_args(
+            messages, max_tokens, response_schema, **call_kwargs
+        )
+        body = {
+            key: val
+            for key, val in kwargs.items()
+            if key not in _BATCH_REQUEST_OPTION_KEYS
+        }
+        body.update(body.pop("extra_body", None) or {})
+        return body
+
+    def _batch_jsonl(
+        self, requests: list[LLMBatchRequest], max_tokens, response_schema, kwargs
+    ) -> bytes:
+        return "\n".join(
+            json.dumps(
+                {
+                    "custom_id": req.Custom_Id,
+                    "method": "POST",
+                    "url": self._batch_url,
+                    "body": self._batch_request_body(
+                        req.Messages, max_tokens, response_schema, kwargs
+                    ),
+                }
+            )
+            for req in requests
+        ).encode("utf-8")
+
+    def create_batch(
+        self,
+        requests,
+        max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        response_schema=None,
+        completion_window: str = "24h",
+        **kwargs,
+    ) -> OpenAIBatch:
+        reqs = self._coerce_batch_requests(requests)
+        input_file = self.Client.files.create(
+            file=(
+                "fdllm-batch.jsonl",
+                self._batch_jsonl(reqs, max_tokens, response_schema, kwargs),
+                "application/jsonl",
+            ),
+            purpose="batch",
+        )
+        batch = self.Client.batches.create(
+            input_file_id=input_file.id,
+            endpoint=self._batch_url,
+            completion_window=completion_window,
+        )
+        return self.get_batch(batch.id, reqs, response_schema)
+
+    async def acreate_batch(
+        self,
+        requests,
+        max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        response_schema=None,
+        completion_window: str = "24h",
+        **kwargs,
+    ) -> OpenAIBatch:
+        reqs = self._coerce_batch_requests(requests)
+        input_file = await self.AClient.files.create(
+            file=(
+                "fdllm-batch.jsonl",
+                self._batch_jsonl(reqs, max_tokens, response_schema, kwargs),
+                "application/jsonl",
+            ),
+            purpose="batch",
+        )
+        batch = await self.AClient.batches.create(
+            input_file_id=input_file.id,
+            endpoint=self._batch_url,
+            completion_window=completion_window,
+        )
+        return self.get_batch(batch.id, reqs, response_schema)
+
+    def get_batch(
+        self, batch_id: str, requests, response_schema=None
+    ) -> OpenAIBatch:
+        return OpenAIBatch(
+            self,
+            batch_id,
+            self._coerce_batch_requests(requests),
+            self._batch_output_parser,
+            response_schema,
+        )
+
+    def _probe_batch_support(self) -> BatchSupport:
+        self.Client.batches.list(limit=1)
+        return BatchSupport.SUPPORTED
+
+    async def _aprobe_batch_support(self) -> BatchSupport:
+        await self.AClient.batches.list(limit=1)
+        return BatchSupport.SUPPORTED
+
 
 def _gpt_common_fmt_output(output, latency, model=None):
     if isinstance(output, GeneratorType):
@@ -322,6 +444,9 @@ def _gpt_common_fmt_output(output, latency, model=None):
 class OpenAICompletionsCaller(OpenAICaller):
     """OpenAI Completions API caller that uses the legacy completions endpoint instead of chat completions."""
 
+    _batch_url: ClassVar[str] = "/v1/completions"
+    _batch_output_parser: ClassVar = staticmethod(Completion.model_validate)
+
     def __init__(self, model: str):
         # Get the model type first
         Modtype = LLMModelType.get_type(model)
@@ -351,6 +476,8 @@ class OpenAICompletionsCaller(OpenAICaller):
             Defaults={},
             Token_Window=model_.Token_Window,
             Token_Limit_Completion=model_.Token_Limit_Completion,
+            Client=client,
+            AClient=aclient,
         )
 
     def format_message(self, message: LLMMessage) -> str:
