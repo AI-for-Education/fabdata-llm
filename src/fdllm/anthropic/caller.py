@@ -186,7 +186,11 @@ class ClaudeCaller(LLMCaller):
                 stop_reason=getattr(output, "stop_reason", None),
                 block_types=[getattr(b, "type", type(b).__name__) for b in content or []],
                 usage=safe_usage(
-                    getattr(output, "usage", None), "input_tokens", "output_tokens"
+                    getattr(output, "usage", None),
+                    "input_tokens",
+                    "cache_creation_input_tokens",
+                    "cache_read_input_tokens",
+                    "output_tokens",
                 ),
             )
             if not content:
@@ -201,15 +205,24 @@ class ClaudeCaller(LLMCaller):
             #### token counts
             usage = getattr(output, "usage", None)
             if usage is not None:
-                total_tokens = usage.input_tokens + usage.output_tokens
+                # input_tokens excludes prompt-cache tokens; add them so input
+                # counts the whole prompt, as for the other providers
+                input_tokens = (
+                    usage.input_tokens
+                    + (getattr(usage, "cache_creation_input_tokens", None) or 0)
+                    + (getattr(usage, "cache_read_input_tokens", None) or 0)
+                )
+                total_tokens = input_tokens + usage.output_tokens
                 completion_tokens = usage.output_tokens
                 reasoning_tokens = _thinking_tokens(usage)
             else:
+                input_tokens = None
                 total_tokens = None
                 completion_tokens = None
                 reasoning_tokens = None
             token_count_kwargs = dict(
                 TokensUsed=total_tokens,
+                TokensUsedInput=input_tokens,
                 TokensUsedCompletion=completion_tokens,
                 TokensUsedReasoning=reasoning_tokens,
             )

@@ -174,6 +174,7 @@ class LLMMessage(BaseModel):
     Documents: list[LLMDocument] | None = None
     ToolCalls: list[LLMToolCall] | None = None
     TokensUsed: int | None = None
+    TokensUsedInput: int | None = None
     TokensUsedCompletion: int | None = None
     TokensUsedReasoning: int | None = None
     LogProbs: Any | None = None

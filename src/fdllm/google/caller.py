@@ -234,10 +234,19 @@ class GoogleGenAICaller(LLMCaller):
             ## token counts
             usage_metadata = getattr(output, "usage_metadata", None)
             if usage_metadata is not None:
+                # candidates_token_count excludes thinking tokens; add them so
+                # completion includes reasoning, as for the other providers
+                candidates_tokens = getattr(usage_metadata, "candidates_token_count", None)
+                thoughts_tokens = getattr(usage_metadata, "thoughts_token_count", None)
+                if candidates_tokens is None and thoughts_tokens is None:
+                    completion_tokens = None
+                else:
+                    completion_tokens = (candidates_tokens or 0) + (thoughts_tokens or 0)
                 token_count_kwargs = {
-                    "TokensUsed": usage_metadata.total_token_count,
-                    "TokensUsedCompletion": usage_metadata.candidates_token_count,
-                    "TokensUsedReasoning": usage_metadata.thoughts_token_count,
+                    "TokensUsed": getattr(usage_metadata, "total_token_count", None),
+                    "TokensUsedInput": getattr(usage_metadata, "prompt_token_count", None),
+                    "TokensUsedCompletion": completion_tokens,
+                    "TokensUsedReasoning": thoughts_tokens,
                 }
             else:
                 token_count_kwargs = {}
