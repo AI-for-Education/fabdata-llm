@@ -314,6 +314,7 @@ def test_format_output_with_usage_and_reasoning_tokens():
             )
         ],
         usage=SimpleNamespace(
+            prompt_tokens=50,
             total_tokens=100,
             completion_tokens=50,
             completion_tokens_details=SimpleNamespace(reasoning_tokens=20),
@@ -325,6 +326,7 @@ def test_format_output_with_usage_and_reasoning_tokens():
     assert isinstance(result, LLMMessage)
     assert result.Message == "Test response"
     assert result.TokensUsed == 100
+    assert result.TokensUsedInput == 50
     assert result.TokensUsedCompletion == 50
     assert result.TokensUsedReasoning == 20
     assert result.LogProbs is not None
@@ -814,6 +816,26 @@ def test_completions_format_output():
     assert result.Role == "assistant"
     assert result.Message == "Completion result"
     assert result.Latency == 1.0
+    assert result.TokensUsed is None
+    assert result.TokensUsedInput is None
+    assert result.TokensUsedCompletion is None
+
+
+def test_completions_format_output_token_counts():
+    """Test completions format_output fills token counts from usage"""
+    caller = OpenAICompletionsCaller(model="text-davinci-003")
+
+    output = SimpleNamespace(
+        choices=[SimpleNamespace(text="Completion result")],
+        usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3, total_tokens=10),
+    )
+
+    result = caller.format_output(output)
+
+    assert result.TokensUsed == 10
+    assert result.TokensUsedInput == 7
+    assert result.TokensUsedCompletion == 3
+    assert result.TokensUsedReasoning is None
 
 
 @pytest.mark.parametrize("choices", [[], None], ids=["empty", "none"])

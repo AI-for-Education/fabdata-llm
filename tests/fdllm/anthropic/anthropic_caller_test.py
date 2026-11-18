@@ -445,8 +445,26 @@ class TestFormatOutput:
         assert result.Role == "assistant"
         assert result.Message == "Hello"
         assert result.TokensUsed == 20
+        assert result.TokensUsedInput == 10
         assert result.TokensUsedCompletion == 10
         assert result.Latency == 1.5
+
+    def test_input_tokens_include_prompt_cache(self, caller):
+        """Input counts cache-write and cache-read tokens as part of the prompt."""
+        output = SimpleNamespace(
+            content=[make_text_block("Hello")],
+            usage=Usage(
+                input_tokens=10,
+                cache_creation_input_tokens=100,
+                cache_read_input_tokens=1000,
+                output_tokens=5,
+            ),
+        )
+        result = caller.format_output(output)
+
+        assert result.TokensUsedInput == 1110
+        assert result.TokensUsed == 1115
+        assert result.TokensUsedCompletion == 5
 
     def test_single_tool_call(self, caller):
         """Test format_output with single tool call."""
@@ -600,6 +618,7 @@ class TestFormatOutput:
 
         assert result.Message == "Hello"
         assert result.TokensUsed is None
+        assert result.TokensUsedInput is None
         assert result.TokensUsedCompletion is None
 
     def test_generator_passthrough(self, caller):

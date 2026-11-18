@@ -265,6 +265,7 @@ def _gpt_common_fmt_output(output, latency, model=None):
                 reasoning_tokens = getattr(ctd, "reasoning_tokens", None)
             token_count_kwargs = dict(
                 TokensUsed=output.usage.total_tokens,
+                TokensUsedInput=getattr(usage, "prompt_tokens", None),
                 TokensUsedCompletion=output.usage.completion_tokens,
                 TokensUsedReasoning=reasoning_tokens,
             )
@@ -439,7 +440,15 @@ class OpenAICompletionsCaller(OpenAICaller):
                 raise InvalidProviderResponse(
                     "Unexpected completions API response format", **error_meta
                 )
-            out = LLMMessage(Role="assistant", Message=choice.text, Latency=latency)
+            usage = error_meta["usage"] or {}
+            out = LLMMessage(
+                Role="assistant",
+                Message=choice.text,
+                Latency=latency,
+                TokensUsed=usage.get("total_tokens"),
+                TokensUsedInput=usage.get("prompt_tokens"),
+                TokensUsedCompletion=usage.get("completion_tokens"),
+            )
             return ensure_nonempty(out, **error_meta)
 
     def _proc_call_args(self, messages, max_tokens, response_schema, **kwargs):

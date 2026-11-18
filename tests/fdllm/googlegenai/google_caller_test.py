@@ -454,7 +454,8 @@ def test_format_output_with_reasoning_tokens():
     output = SimpleNamespace(
         candidates=[candidate],
         usage_metadata=SimpleNamespace(
-            total_token_count=150,
+            prompt_token_count=30,
+            total_token_count=180,
             candidates_token_count=50,
             thoughts_token_count=100,  # Reasoning tokens
         ),
@@ -462,7 +463,45 @@ def test_format_output_with_reasoning_tokens():
 
     result = caller.format_output(output)
 
+    assert result.TokensUsed == 180
+    assert result.TokensUsedInput == 30
+    # completion includes reasoning, as for the other providers
+    assert result.TokensUsedCompletion == 150
     assert result.TokensUsedReasoning == 100
+
+
+@pytest.mark.parametrize(
+    "candidates, thoughts, expected_completion",
+    [
+        (None, 100, 100),  # Google sometimes omits candidates_token_count
+        (50, None, 50),
+        (None, None, None),
+    ],
+)
+def test_format_output_completion_tokens_with_missing_counts(
+    candidates, thoughts, expected_completion
+):
+    """A missing count counts as 0; completion is None only if both are missing"""
+    caller = GoogleGenAICaller(model="gemini-2.0-flash")
+
+    part = SimpleNamespace(text="Answer", function_call=None)
+    content = SimpleNamespace(parts=[part])
+    candidate = SimpleNamespace(content=content, logprobs_result=None)
+    output = SimpleNamespace(
+        candidates=[candidate],
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=None,
+            total_token_count=None,
+            candidates_token_count=candidates,
+            thoughts_token_count=thoughts,
+        ),
+    )
+
+    result = caller.format_output(output)
+
+    assert result.TokensUsedCompletion == expected_completion
+    assert result.TokensUsedReasoning == thoughts
+    assert result.TokensUsedInput is None
 
 
 def test_format_output_without_usage_metadata():
