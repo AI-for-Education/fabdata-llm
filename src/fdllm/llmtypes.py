@@ -12,9 +12,14 @@ from enum import Enum
 from io import BytesIO
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
+    ClassVar,
     Literal,
 )
+
+if TYPE_CHECKING:
+    from .batch import LLMBatch
 
 import numpy as np
 from PIL import Image, ImageFile
@@ -37,7 +42,7 @@ from .constants import (
     LLM_DEFAULT_MAX_RETRIES,
     LLM_DEFAULT_MAX_TOKENS,
 )
-from .errors import LLMResponseModelNameMismatch
+from .errors import LLMResponseModelNameMismatch, classify_probe_error
 from .logging_utils import get_logger, log_call_completion, log_call_start
 from .retry import record_attempts, should_retry, wait_retry_after
 from .sysutils import deepmerge_dicts, get_google_token, load_models
@@ -315,6 +320,41 @@ class LLMDocument(BaseModel):
         return [cls(Path=p) for p in paths]
 
 
+class LLMBatchRequest(BaseModel):
+    """One request in a provider batch job (see ``LLMCaller.create_batch``).
+
+    ``Messages`` accepts a single LLMMessage or a message list, like
+    ``LLMCaller.call``. ``Custom_Id`` is the provider-side request id and
+    defaults to ``req-{index}``. Call settings are shared across the whole
+    batch — pass them to ``create_batch`` like a normal ``call``.
+    """
+
+    Messages: list[LLMMessage]
+    Custom_Id: str | None = None
+
+    @field_validator("Messages", mode="before")
+    @classmethod
+    def _single_message_to_list(cls, v):
+        return [v] if isinstance(v, LLMMessage) else v
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
+class LLMBatchResult(BaseModel):
+    """Outcome of one request in a provider batch job, in submission order.
+
+    Exactly one of ``Message``/``Error`` is set: ``Message`` for a formatted
+    response, ``Error`` for a request the provider rejected or whose response
+    could not be formatted.
+    """
+
+    Custom_Id: str
+    Message: LLMMessage | None = None
+    Error: BaseException | None = None
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
 @dataclass(config=ConfigDict(validate_assignment=True))
 class LLMCallArgNames:
     Messages: str
@@ -329,6 +369,19 @@ class ResponseValidationMode(str, Enum):
     ALLOW_ALL = "allow_all"
 
 
+class BatchSupport(str, Enum):
+    """Outcome of a live provider batch-endpoint probe.
+
+    ``SUPPORTED``: the endpoint answered (any routed response, including
+    auth failures). ``UNSUPPORTED``: the provider has no batch route.
+    ``UNKNOWN``: the probe was inconclusive (network error, 5xx, ...).
+    """
+
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
+    UNKNOWN = "unknown"
+
+
 class LLMCaller(ABC, BaseModel):
     Model: LLMModelType
     Func: Callable[..., Any]
@@ -340,6 +393,9 @@ class LLMCaller(ABC, BaseModel):
     response_model_validation_mode: ResponseValidationMode = (
         ResponseValidationMode.ALLOW_ALL
     )
+
+    # subclasses that implement create_batch/acreate_batch set this True
+    Supports_Batch: ClassVar[bool] = False
 
     @property
     def logger(self) -> logging.Logger:
@@ -469,6 +525,169 @@ class LLMCaller(ABC, BaseModel):
             # Log failed completion
             log_call_completion(self.logger, self.Model.Name, start_time, error=e)
             raise
+
+    def create_batch(
+        self,
+        requests: list[LLMBatchRequest | list[LLMMessage] | LLMMessage],
+        max_tokens: int | None = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: type[BaseModel] | None = None,
+        **kwargs,
+    ) -> "LLMBatch":
+        """Submit a provider-side batch job and return its handle.
+
+        ``max_tokens``, ``response_schema`` and any further call kwargs
+        apply to every request in the batch, like ``call``. Provider
+        batches are processed asynchronously (usually at a reduced price);
+        poll with ``batch.status()`` then collect with ``batch.results()``,
+        or block with ``batch.wait()``. See ``call_batch`` for the one-shot
+        form.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support provider batch mode"
+        )
+
+    async def acreate_batch(
+        self,
+        requests: list[LLMBatchRequest | list[LLMMessage] | LLMMessage],
+        max_tokens: int | None = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: type[BaseModel] | None = None,
+        **kwargs,
+    ) -> "LLMBatch":
+        """Async ``create_batch``."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support provider batch mode"
+        )
+
+    def check_batch_support(self) -> BatchSupport:
+        """Probe the provider's batch endpoint to check batch support.
+
+        For callers with no batch implementation this returns
+        ``BatchSupport.UNSUPPORTED`` without any network call. Otherwise it
+        sends one read-only list request: ``BatchSupport.SUPPORTED`` means
+        the endpoint answered (an auth error still proves the route
+        exists), ``BatchSupport.UNSUPPORTED`` means the provider has no
+        batch route, and ``BatchSupport.UNKNOWN`` means the probe was
+        inconclusive.
+        """
+        if not self.Supports_Batch:
+            return BatchSupport.UNSUPPORTED
+        try:
+            return self._probe_batch_support()
+        except Exception as e:
+            return BatchSupport(classify_probe_error(e))
+
+    async def acheck_batch_support(self) -> BatchSupport:
+        """Async ``check_batch_support``."""
+        if not self.Supports_Batch:
+            return BatchSupport.UNSUPPORTED
+        try:
+            return await self._aprobe_batch_support()
+        except Exception as e:
+            return BatchSupport(classify_probe_error(e))
+
+    def _probe_batch_support(self) -> BatchSupport:
+        raise NotImplementedError
+
+    async def _aprobe_batch_support(self) -> BatchSupport:
+        raise NotImplementedError
+
+    def get_batch(
+        self,
+        batch_id: str,
+        requests: list[LLMBatchRequest | list[LLMMessage] | LLMMessage],
+        response_schema: type[BaseModel] | None = None,
+    ) -> "LLMBatch":
+        """Re-attach to an already submitted provider batch job.
+
+        Batch jobs can outlive the process that submitted them; keep the
+        returned ``LLMBatch.Id`` and the requests to poll and collect results
+        later. Pass the same ``response_schema`` used at submit time so
+        results are formatted correctly.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support provider batch mode"
+        )
+
+    def call_batch(
+        self,
+        requests: list[LLMBatchRequest | list[LLMMessage] | LLMMessage],
+        max_tokens: int | None = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: type[BaseModel] | None = None,
+        poll_interval: float | None = None,
+        timeout: float | None = None,
+        return_exceptions: bool = False,
+        **kwargs,
+    ) -> list[LLMMessage | BaseException]:
+        """Submit a provider batch and block until it completes.
+
+        Returns one ``LLMMessage`` per request, in order. With
+        ``return_exceptions=True`` failed requests appear as the raised
+        exception; otherwise the first failure is raised after the batch
+        finishes.
+        """
+        batch = self.create_batch(
+            requests,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+            **kwargs,
+        )
+        results = batch.wait(poll_interval=poll_interval, timeout=timeout)
+        return self._unwrap_batch_results(results, return_exceptions)
+
+    async def acall_batch(
+        self,
+        requests: list[LLMBatchRequest | list[LLMMessage] | LLMMessage],
+        max_tokens: int | None = LLM_DEFAULT_MAX_TOKENS,
+        response_schema: type[BaseModel] | None = None,
+        poll_interval: float | None = None,
+        timeout: float | None = None,
+        return_exceptions: bool = False,
+        **kwargs,
+    ) -> list[LLMMessage | BaseException]:
+        """Async ``call_batch``."""
+        batch = await self.acreate_batch(
+            requests,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+            **kwargs,
+        )
+        results = await batch.await_completion(
+            poll_interval=poll_interval, timeout=timeout
+        )
+        return self._unwrap_batch_results(results, return_exceptions)
+
+    def _coerce_batch_requests(
+        self,
+        requests: list[LLMBatchRequest | list[LLMMessage] | LLMMessage],
+    ) -> list[LLMBatchRequest]:
+        out = []
+        seen = set()
+        for i, req in enumerate(requests):
+            if not isinstance(req, LLMBatchRequest):
+                req = LLMBatchRequest(Messages=req)
+            if req.Custom_Id is None:
+                req = req.model_copy(update={"Custom_Id": f"req-{i}"})
+            if req.Custom_Id in seen:
+                raise ValueError(
+                    f"Duplicate Custom_Id {req.Custom_Id!r} in batch requests"
+                )
+            seen.add(req.Custom_Id)
+            out.append(req)
+        return out
+
+    @staticmethod
+    def _unwrap_batch_results(
+        results: list[LLMBatchResult], return_exceptions: bool
+    ) -> list[LLMMessage | BaseException]:
+        out = []
+        for res in results:
+            if res.Error is not None:
+                if not return_exceptions:
+                    raise res.Error
+                out.append(res.Error)
+            else:
+                out.append(res.Message)
+        return out
 
     def _validate_response_model(self, formatted_output: LLMMessage):
         api_model_name_parsed = self._parse_model_name_string(self.Model.Api_Model_Name)

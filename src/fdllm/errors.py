@@ -203,3 +203,25 @@ def ensure_nonempty(msg, **error_meta):
 
 def is_retryable_response_error(exc: BaseException) -> bool:
     return isinstance(exc, LLMResponseError) and exc.retryable
+
+
+def classify_probe_error(exc: BaseException) -> str:
+    """Classify a failed read-only probe (e.g. a batch list call) by HTTP
+    status into ``"supported"``, ``"unsupported"`` or ``"unknown"``.
+
+    404/405/501 mean the provider has no such route. 400/401/403 mean the
+    route exists — the request was validated, or the key lacks permission;
+    submitting may still fail for auth. Anything else (5xx, connection
+    errors, SDK-internal errors) is inconclusive.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        # google-genai's APIError carries .code instead
+        status = getattr(exc, "code", None)
+    if not isinstance(status, int) or isinstance(status, bool):
+        return "unknown"
+    if status in (400, 401, 403):
+        return "supported"
+    if status in (404, 405, 501):
+        return "unsupported"
+    return "unknown"

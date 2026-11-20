@@ -217,6 +217,9 @@ FabData-LLM is a Python package that provides a set of high-level abstractions a
     - All LLMCaller objects have two call methods: ```call``` and ```acall```
     - ChatController object has two chat methods: ```chat``` and ```achat```
 
+- You want to run many calls at once
+    - ```create_batch```/```call_batch``` submit requests to the provider batch APIs of OpenAI, Anthropic and Google GenAI (typically ~50% cheaper, results within ~24h) — see [Batch mode](#batch-mode)
+
 - You want to use well-tested code
     - FabData-LLM currently has over 80% branch coverage in pytest
 
@@ -352,6 +355,59 @@ try:
 except Exception as e:
     print(getattr(e, "fdllm_attempts", None), getattr(e, "fdllm_retries_exhausted", None))
 ```
+
+### Batch mode
+
+`create_batch()` submits a list of requests to the provider's asynchronous batch endpoint — usually billed at ~50% price with results delivered within ~24 hours. Supported for `OpenAICaller` (chat and completions endpoints), `ClaudeCaller` and `GoogleGenAICaller`; other callers raise `NotImplementedError`.
+
+The intended usage is two separate steps: one command builds prompts and submits the job, another polls and processes the results — often hours later or on a different machine.
+
+**Step 1 — submit.** Build the messages, call `create_batch`, then `batch.save()` persists everything needed to re-attach later (model name, batch id, requests, response schema). `max_tokens`/`response_schema`/call kwargs apply to every request, like `call()`:
+
+```python
+# submit.py
+from fdllm import LLMMessage, get_caller
+
+caller = get_caller("gpt-4.1-mini")
+requests = [
+    LLMMessage(Role="user", Message=f"What is {i} squared?")
+    for i in range(100)
+]
+
+batch = caller.create_batch(requests, max_tokens=500, temperature=0)
+batch.save("batch_job.json") # save this for later!
+print("submitted", batch.Id)
+```
+
+**Step 2 — collect.** `fdllm.load_batch()` rebuilds the caller and re-attaches in one step. Check the status and process each `LLMBatchResult`, in submission order:
+
+```python
+# collect.py
+from fdllm import LLMBatchStatus, load_batch
+
+batch = load_batch("batch_job.json")
+
+if batch.status() is not LLMBatchStatus.COMPLETED:
+    print("still running:", batch.status())
+    raise SystemExit
+
+for res in batch.results(): 
+    if res.Error is not None:
+        print(res.Custom_Id, "failed:", res.Error)
+    else:
+        print(res.Custom_Id, res.Message.Message)
+```
+
+Alternatively, block in the collector with `batch.wait(poll_interval=60, timeout=3600)`, or `batch.cancel()` to abort the job. `load_batch(path, caller)` re-uses an existing caller instead of constructing one from the saved model name, and `caller.get_batch(batch_id, requests)` remains available for manual re-attachment (e.g. your own state store).
+
+If the process can afford to wait inline, `call_batch()`/`acall_batch()` do the whole submit-and-wait in one step and return the unwrapped `LLMMessage` list (raising the first request error, unless `return_exceptions=True`):
+
+```python
+out = caller.call_batch(requests, poll_interval=60, timeout=3600)
+# async: out = await caller.acall_batch(requests)
+```
+
+Some OpenAI-compatible providers expose the API interface without implementing the batch endpoint. `caller.check_batch_support()` (or `acheck_batch_support()`) pings the provider's read-only batch-list endpoint and returns a `BatchSupport` value: `SUPPORTED` when the route exists, `UNSUPPORTED` when the provider has no batch route (or the caller has no batch implementation), and `UNKNOWN` when the probe is inconclusive.
 
 ### Logging
 
