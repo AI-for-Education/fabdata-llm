@@ -261,11 +261,14 @@ class LLMImage(BaseModel):
             return
         detail = self.Detail
         width, height = im.size
+        maxdim = max(width, height)
         if detail == "low":
             ImageFile.LOAD_TRUNCATED_IMAGES = True
-            im = im.resize((512, 512), Image.BILINEAR)
+            if maxdim > 512:
+                finalwidth = int(np.ceil(width * (512 / maxdim)))
+                finalheight = int(np.ceil(height * (512 / maxdim)))
+                im = im.resize((finalwidth, finalheight), Image.BILINEAR)
         else:
-            maxdim = max(width, height)
             if maxdim > 2048:
                 width = width * (2048 / maxdim)
                 height = height * (2048 / maxdim)
