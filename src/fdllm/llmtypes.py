@@ -661,11 +661,17 @@ class LLMCaller(ABC, BaseModel):
         requests: list[LLMBatchRequest | list[LLMMessage] | LLMMessage],
     ) -> list[LLMBatchRequest]:
         out = []
+        seen = set()
         for i, req in enumerate(requests):
             if not isinstance(req, LLMBatchRequest):
                 req = LLMBatchRequest(Messages=req)
             if req.Custom_Id is None:
                 req = req.model_copy(update={"Custom_Id": f"req-{i}"})
+            if req.Custom_Id in seen:
+                raise ValueError(
+                    f"Duplicate Custom_Id {req.Custom_Id!r} in batch requests"
+                )
+            seen.add(req.Custom_Id)
             out.append(req)
         return out
 

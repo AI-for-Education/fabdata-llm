@@ -6,7 +6,7 @@ all with mocked SDK clients.
 import asyncio
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -715,3 +715,602 @@ def test_google_batch_results_raise_when_not_completed():
     )
     with pytest.raises(LLMBatchError):
         batch.results()
+
+
+# ===== Duplicate Custom_Id =====
+
+
+def test_coerce_batch_requests_duplicate_ids_raise():
+    caller = FakeCaller()
+
+    with pytest.raises(ValueError, match="Duplicate Custom_Id"):
+        caller._coerce_batch_requests(
+            [
+                LLMBatchRequest(
+                    Messages=[LLMMessage(Role="user", Message="a")],
+                    Custom_Id="dup",
+                ),
+                LLMBatchRequest(
+                    Messages=[LLMMessage(Role="user", Message="b")],
+                    Custom_Id="dup",
+                ),
+            ]
+        )
+
+    # a supplied id can also collide with a generated req-{i}
+    with pytest.raises(ValueError, match="Duplicate Custom_Id"):
+        caller._coerce_batch_requests(
+            [
+                LLMBatchRequest(
+                    Messages=[LLMMessage(Role="user", Message="a")],
+                    Custom_Id="req-2",
+                ),
+                LLMMessage(Role="user", Message="b"),
+                LLMMessage(Role="user", Message="c"),
+            ]
+        )
+
+
+# ===== Async batch methods =====
+
+
+def _async_pager(items):
+    async def gen():
+        for item in items:
+            yield item
+
+    return gen()
+
+
+def _openai_acaller():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    caller.AClient = MagicMock()
+    return caller
+
+
+def test_openai_abatch_status_results_cancel():
+    caller = _openai_acaller()
+    batch = caller.get_batch("batch_1", _msgs(2))
+
+    caller.AClient.batches.retrieve = AsyncMock(
+        return_value=SimpleNamespace(
+            status="in_progress", output_file_id=None, error_file_id=None
+        )
+    )
+    assert asyncio.run(batch.astatus()) is LLMBatchStatus.PENDING
+
+    caller.AClient.batches.retrieve = AsyncMock(
+        return_value=SimpleNamespace(
+            status="completed", output_file_id="out-1", error_file_id="err-1"
+        )
+    )
+    out_text = "\n".join(
+        json.dumps(
+            {
+                "custom_id": cid,
+                "response": {
+                    "status_code": 200,
+                    "body": _openai_completion_body(text=f"resp-{cid}"),
+                },
+            }
+        )
+        for cid in ("req-0", "req-1")
+    )
+    err_text = "\n".join(
+        [
+            # mentions req-0 too, but the output-file result must win
+            json.dumps(
+                {
+                    "custom_id": "req-0",
+                    "response": {
+                        "status_code": 500,
+                        "body": {"error": {"message": "should lose"}},
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "custom_id": "req-2",
+                    "response": {
+                        "status_code": 400,
+                        "body": {"error": {"message": "req-2 bad"}},
+                    },
+                }
+            ),
+        ]
+    )
+    caller.AClient.files.content = AsyncMock(
+        side_effect=lambda fid: SimpleNamespace(
+            text=out_text if fid == "out-1" else err_text
+        )
+    )
+    results = asyncio.run(batch.aresults())
+    assert [r.Custom_Id for r in results] == ["req-0", "req-1"]
+    assert [r.Message.Message for r in results] == [
+        "resp-req-0",
+        "resp-req-1",
+    ]
+
+    caller.AClient.batches.cancel = AsyncMock()
+    asyncio.run(batch.acancel())
+    caller.AClient.batches.cancel.assert_awaited_once_with("batch_1")
+
+
+def test_openai_acreate_and_acall_batch():
+    caller = _openai_acaller()
+    caller.AClient.files.create = AsyncMock(
+        return_value=SimpleNamespace(id="file-1")
+    )
+    caller.AClient.batches.create = AsyncMock(
+        return_value=SimpleNamespace(id="batch_1")
+    )
+
+    batch = asyncio.run(caller.acreate_batch(_msgs(1)))
+    assert batch.Id == "batch_1"
+
+    caller.AClient.batches.retrieve = AsyncMock(
+        return_value=SimpleNamespace(
+            status="completed", output_file_id="out-1", error_file_id=None
+        )
+    )
+    caller.AClient.files.content = AsyncMock(
+        return_value=SimpleNamespace(
+            text=json.dumps(
+                {
+                    "custom_id": "req-0",
+                    "response": {
+                        "status_code": 200,
+                        "body": _openai_completion_body(),
+                    },
+                }
+            )
+        )
+    )
+    out = asyncio.run(caller.acall_batch(_msgs(1), poll_interval=0))
+    assert [m.Message for m in out] == ["hello"]
+
+
+def test_batch_await_completion():
+    caller = _openai_acaller()
+    batch = caller.get_batch("batch_1", _msgs(1))
+
+    caller.AClient.batches.retrieve = AsyncMock(
+        side_effect=[
+            SimpleNamespace(
+                status="in_progress",
+                output_file_id=None,
+                error_file_id=None,
+            ),
+            SimpleNamespace(
+                status="completed",
+                output_file_id="out-1",
+                error_file_id=None,
+            ),
+            SimpleNamespace(
+                status="completed",
+                output_file_id="out-1",
+                error_file_id=None,
+            ),
+        ]
+    )
+    caller.AClient.files.content = AsyncMock(
+        return_value=SimpleNamespace(
+            text=json.dumps(
+                {
+                    "custom_id": "req-0",
+                    "response": {
+                        "status_code": 200,
+                        "body": _openai_completion_body(),
+                    },
+                }
+            )
+        )
+    )
+    results = asyncio.run(batch.await_completion(poll_interval=0))
+    assert [r.Message.Message for r in results] == ["hello"]
+
+
+def test_batch_await_completion_failure_and_timeout():
+    caller = _openai_acaller()
+    batch = caller.get_batch("batch_1", _msgs(1))
+
+    caller.AClient.batches.retrieve = AsyncMock(
+        return_value=SimpleNamespace(
+            status="expired", output_file_id=None, error_file_id=None
+        )
+    )
+    with pytest.raises(LLMBatchError, match="expired"):
+        asyncio.run(batch.await_completion(poll_interval=0))
+
+    caller.AClient.batches.retrieve = AsyncMock(
+        return_value=SimpleNamespace(
+            status="in_progress", output_file_id=None, error_file_id=None
+        )
+    )
+    with pytest.raises(TimeoutError):
+        asyncio.run(
+            batch.await_completion(poll_interval=0.001, timeout=0.01)
+        )
+
+
+def test_anthropic_abatch_status_results_cancel():
+    caller = ClaudeCaller(DEFAULT_CLAUDE_MODEL)
+    caller.Client = MagicMock()
+    caller.AClient = MagicMock()
+    batch = caller.get_batch("msgbatch_1", _msgs(2))
+
+    caller.AClient.beta.messages.batches.retrieve = AsyncMock(
+        return_value=SimpleNamespace(processing_status="ended")
+    )
+    assert asyncio.run(batch.astatus()) is LLMBatchStatus.COMPLETED
+
+    caller.AClient.beta.messages.batches.results = AsyncMock(
+        return_value=_async_pager(
+            [
+                SimpleNamespace(
+                    custom_id="req-1",
+                    result=SimpleNamespace(
+                        type="succeeded",
+                        message=_anthropic_message("two"),
+                    ),
+                ),
+                SimpleNamespace(
+                    custom_id="req-0",
+                    result=SimpleNamespace(
+                        type="succeeded",
+                        message=_anthropic_message("one"),
+                    ),
+                ),
+            ]
+        )
+    )
+    results = asyncio.run(batch.aresults())
+    assert [r.Custom_Id for r in results] == ["req-0", "req-1"]
+    assert [r.Message.Message for r in results] == ["one", "two"]
+
+    caller.Client.beta.messages.batches.cancel = MagicMock()
+    batch.cancel()
+    caller.Client.beta.messages.batches.cancel.assert_called_once_with(
+        "msgbatch_1"
+    )
+    caller.AClient.beta.messages.batches.cancel = AsyncMock()
+    asyncio.run(batch.acancel())
+    caller.AClient.beta.messages.batches.cancel.assert_awaited_once_with(
+        "msgbatch_1"
+    )
+
+
+def test_google_abatch_status_results_cancel():
+    from google.genai import types
+
+    caller = GoogleGenAICaller(DEFAULT_GEMINI_MODEL)
+    caller.Client = MagicMock()
+    batch = caller.get_batch("batches/123", _msgs(1))
+
+    caller.Client.aio.batches.get = AsyncMock(
+        return_value=SimpleNamespace(
+            state=types.JobState.JOB_STATE_SUCCEEDED,
+            dest=SimpleNamespace(
+                inlined_responses=[
+                    types.InlinedResponse(
+                        response=_google_response("hello"),
+                        metadata={"key": "req-0"},
+                    )
+                ]
+            ),
+        )
+    )
+    assert asyncio.run(batch.astatus()) is LLMBatchStatus.COMPLETED
+    results = asyncio.run(batch.aresults())
+    assert [r.Message.Message for r in results] == ["hello"]
+
+    caller.Client.batches.cancel = MagicMock()
+    batch.cancel()
+    caller.Client.batches.cancel.assert_called_once_with(name="batches/123")
+    caller.Client.aio.batches.cancel = AsyncMock()
+    asyncio.run(batch.acancel())
+    caller.Client.aio.batches.cancel.assert_awaited_once_with(
+        name="batches/123"
+    )
+
+
+def test_google_acreate_batch():
+    caller = GoogleGenAICaller(DEFAULT_GEMINI_MODEL)
+    caller.Client = MagicMock()
+    caller.Client.aio.batches.create = AsyncMock(
+        return_value=SimpleNamespace(name="batches/9")
+    )
+    batch = asyncio.run(caller.acreate_batch(_msgs(1)))
+    assert batch.Id == "batches/9"
+
+
+# ===== OpenAI output-line parsing edge cases =====
+
+
+def test_openai_parse_output_lines_skips_bad_records():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    caller.Client = MagicMock()
+    batch = caller.get_batch("batch_1", _msgs(2))
+
+    text = "\n".join(
+        [
+            "",
+            "   ",
+            # record without custom_id is ignored
+            json.dumps({"response": {"status_code": 200, "body": {}}}),
+            json.dumps(
+                {
+                    "custom_id": "req-0",
+                    "response": {
+                        "status_code": 200,
+                        "body": _openai_completion_body(),
+                    },
+                }
+            ),
+        ]
+    )
+    by_id = batch._parse_output_lines(text)
+    assert list(by_id) == ["req-0"]
+    assert by_id["req-0"].Message.Message == "hello"
+
+
+def test_openai_parse_output_lines_error_shapes():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    caller.Client = MagicMock()
+    batch = caller.get_batch("batch_1", _msgs(4))
+
+    text = "\n".join(
+        [
+            # missing status_code, error nested in body
+            json.dumps(
+                {
+                    "custom_id": "req-0",
+                    "response": {
+                        "body": {"error": {"message": "nested bad"}}
+                    },
+                }
+            ),
+            # error stored at the record level as a plain string
+            json.dumps({"custom_id": "req-1", "error": "record bad"}),
+            # status 200 but the body fails output parsing
+            json.dumps(
+                {
+                    "custom_id": "req-2",
+                    "response": {"status_code": 200, "body": {}},
+                }
+            ),
+            # response key entirely absent
+            json.dumps({"custom_id": "req-3"}),
+        ]
+    )
+    by_id = batch._parse_output_lines(text)
+
+    assert isinstance(by_id["req-0"].Error, LLMProviderError)
+    assert "nested bad" in str(by_id["req-0"].Error)
+
+    assert isinstance(by_id["req-1"].Error, LLMProviderError)
+    assert "record bad" in str(by_id["req-1"].Error)
+
+    assert by_id["req-2"].Message is None
+    assert by_id["req-2"].Error is not None
+
+    assert isinstance(by_id["req-3"].Error, LLMProviderError)
+
+
+def test_format_output_failure_becomes_error_result():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    client = _mock_openai_client(caller)
+    batch = caller.get_batch("batch_1", _msgs(1))
+
+    client.batches.retrieve.return_value = SimpleNamespace(
+        status="completed", output_file_id="out-1", error_file_id=None
+    )
+    client.files.content.return_value = SimpleNamespace(
+        text=json.dumps(
+            {
+                "custom_id": "req-0",
+                "response": {
+                    "status_code": 200,
+                    "body": _openai_completion_body(),
+                },
+            }
+        )
+    )
+    with patch.object(
+        OpenAICaller, "format_output", side_effect=RuntimeError("fmt broke")
+    ):
+        results = batch.results()
+    assert results[0].Message is None
+    assert isinstance(results[0].Error, RuntimeError)
+
+
+def test_openai_batch_collect_merges_error_file():
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    client = _mock_openai_client(caller)
+    batch = caller.get_batch("batch_1", _msgs(2))
+
+    out_text = json.dumps(
+        {
+            "custom_id": "req-0",
+            "response": {
+                "status_code": 200,
+                "body": _openai_completion_body(),
+            },
+        }
+    )
+    # the error file also mentions req-0; the output result must win
+    err_text = "\n".join(
+        [
+            json.dumps(
+                {
+                    "custom_id": "req-0",
+                    "response": {
+                        "status_code": 500,
+                        "body": {"error": {"message": "should lose"}},
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "custom_id": "req-1",
+                    "response": {
+                        "status_code": 400,
+                        "body": {"error": {"message": "req-1 bad"}},
+                    },
+                }
+            ),
+        ]
+    )
+    client.batches.retrieve.return_value = SimpleNamespace(
+        status="completed", output_file_id="out-1", error_file_id="err-1"
+    )
+    client.files.content.side_effect = lambda fid: SimpleNamespace(
+        text=out_text if fid == "out-1" else err_text
+    )
+
+    results = batch.results()
+    assert results[0].Message.Message == "hello"
+    assert isinstance(results[1].Error, LLMProviderError)
+    assert "req-1 bad" in str(results[1].Error)
+
+
+# ===== Anthropic expired/canceled results =====
+
+
+def test_anthropic_batch_results_expired_and_canceled():
+    caller = ClaudeCaller(DEFAULT_CLAUDE_MODEL)
+    caller.Client = MagicMock()
+    batch = caller.get_batch("msgbatch_1", _msgs(2))
+
+    caller.Client.beta.messages.batches.retrieve.return_value = (
+        SimpleNamespace(processing_status="ended")
+    )
+    caller.Client.beta.messages.batches.results.return_value = iter(
+        [
+            SimpleNamespace(
+                custom_id="req-0",
+                result=SimpleNamespace(type="expired"),
+            ),
+            SimpleNamespace(
+                custom_id="req-1",
+                result=SimpleNamespace(type="canceled"),
+            ),
+        ]
+    )
+    results = batch.results()
+    assert isinstance(results[0].Error, LLMProviderError)
+    # expired requests may be worth resubmitting
+    assert results[0].Error.retryable is True
+    assert isinstance(results[1].Error, LLMProviderError)
+    assert results[1].Error.retryable is False
+
+
+# ===== Google status mapping and result edge cases =====
+
+
+def test_google_status_mapping():
+    from google.genai import types
+
+    caller = GoogleGenAICaller(DEFAULT_GEMINI_MODEL)
+    caller.Client = MagicMock()
+    batch = caller.get_batch("batches/123", _msgs(1))
+
+    cases = [
+        (types.JobState.JOB_STATE_QUEUED, LLMBatchStatus.PENDING),
+        (types.JobState.JOB_STATE_FAILED, LLMBatchStatus.FAILED),
+        (types.JobState.JOB_STATE_CANCELLED, LLMBatchStatus.CANCELLED),
+        (types.JobState.JOB_STATE_EXPIRED, LLMBatchStatus.EXPIRED),
+    ]
+    for state, expected in cases:
+        caller.Client.batches.get.return_value = SimpleNamespace(
+            state=state, dest=None
+        )
+        assert batch.status() is expected
+
+
+def test_google_batch_results_raise_for_file_dest():
+    from google.genai import types
+
+    caller = GoogleGenAICaller(DEFAULT_GEMINI_MODEL)
+    caller.Client = MagicMock()
+    batch = caller.get_batch("batches/123", _msgs(1))
+    caller.Client.batches.get.return_value = SimpleNamespace(
+        state=types.JobState.JOB_STATE_SUCCEEDED,
+        dest=SimpleNamespace(
+            inlined_responses=None, file_name="files/results-1"
+        ),
+    )
+    with pytest.raises(LLMBatchError, match="not supported"):
+        batch.results()
+
+
+def test_google_batch_results_index_fallback():
+    from google.genai import types
+
+    caller = GoogleGenAICaller(DEFAULT_GEMINI_MODEL)
+    caller.Client = MagicMock()
+    batch = caller.get_batch("batches/123", _msgs(2))
+    caller.Client.batches.get.return_value = SimpleNamespace(
+        state=types.JobState.JOB_STATE_SUCCEEDED,
+        dest=SimpleNamespace(
+            inlined_responses=[
+                # metadata key doesn't match any submitted Custom_Id:
+                # the result is matched back by position instead
+                types.InlinedResponse(
+                    response=_google_response("one"),
+                    metadata={"key": "provider-key"},
+                ),
+                types.InlinedResponse(
+                    response=_google_response("two"),
+                    metadata=None,
+                ),
+            ]
+        ),
+    )
+    results = batch.results()
+    assert [r.Custom_Id for r in results] == ["req-0", "req-1"]
+    assert [r.Message.Message for r in results] == ["one", "two"]
+
+
+# ===== save/load edge cases =====
+
+
+def test_save_and_load_batch_without_schema(tmp_path):
+    caller = OpenAICaller(DEFAULT_OPENAI_MODEL)
+    client = _mock_openai_client(caller)
+    client.files.create.return_value = SimpleNamespace(id="file-1")
+    client.batches.create.return_value = SimpleNamespace(id="batch_1")
+    batch = caller.create_batch(_msgs(1))
+
+    path = tmp_path / "job.json"
+    batch.save(path)
+    assert json.loads(path.read_text())["response_schema"] is None
+
+    loaded = load_batch(path, caller)
+    assert loaded.Id == "batch_1"
+    assert loaded.Response_Schema is None
+
+
+def test_load_batch_unresolvable_schema(tmp_path, caplog):
+    path = tmp_path / "job.json"
+    path.write_text(
+        json.dumps(
+            {
+                "provider": "openai",
+                "model": DEFAULT_OPENAI_MODEL,
+                "batch_id": "batch_9",
+                "requests": [
+                    {
+                        "Messages": [
+                            {"Role": "user", "Message": "hi"}
+                        ],
+                        "Custom_Id": "req-0",
+                    }
+                ],
+                "response_schema": "no_such_module:Missing",
+            }
+        )
+    )
+    loaded = load_batch(path, OpenAICaller(DEFAULT_OPENAI_MODEL))
+    assert loaded.Response_Schema is None
+    assert "could not resolve saved response schema" in caplog.text
